@@ -99,6 +99,14 @@ def buscar_ticket(ticket_id):
 
 def adicionar_observacao(ticket_id, mensagem, tag):
     """Adiciona observação interna (nota privada) ao ticket."""
+    # Primeiro busca as tags atuais do ticket
+    ticket = buscar_ticket(ticket_id)
+    tags_atuais = ticket.get("tags", []) if ticket else []
+
+    # Adiciona a nova tag se ainda não existe
+    if tag not in tags_atuais:
+        tags_atuais.append(tag)
+
     url = f"{ZENDESK_BASE_URL}/tickets/{ticket_id}.json"
     payload = {
         "ticket": {
@@ -106,13 +114,13 @@ def adicionar_observacao(ticket_id, mensagem, tag):
                 "body": mensagem,
                 "public": False,
             },
-            "additional_tags": [tag],
+            "tags": tags_atuais,
         }
     }
     try:
         resp = http_requests.put(url, auth=ZENDESK_AUTH, json=payload, timeout=15)
         resp.raise_for_status()
-        logger.info(f"✅ Observação '{tag}' adicionada ao ticket #{ticket_id}")
+        logger.info(f"✅ Observação + tag '{tag}' adicionadas ao ticket #{ticket_id}")
         return True
     except http_requests.exceptions.RequestException as e:
         logger.error(f"❌ Erro ao atualizar ticket #{ticket_id}: {e}")
