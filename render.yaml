@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: zendesk-timer
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: ZENDESK_SUBDOMAIN
+        sync: false
+      - key: ZENDESK_EMAIL
+        sync: false
+      - key: ZENDESK_API_TOKEN
+        sync: false
+      - key: CUSTOM_STATUS_ID
+        value: "50108859882131"
+      - key: WEBHOOK_SECRET
+        sync: false
