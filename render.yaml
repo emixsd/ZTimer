@@ -2,7 +2,7 @@ services:
   - type: web
     name: zendesk-timer
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
     envVars:
@@ -16,3 +16,5 @@ services:
         value: "50108859882131"
       - key: WEBHOOK_SECRET
         sync: false
+      - key: POLLING_INTERVALO
+        value: "120"
