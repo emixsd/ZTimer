@@ -1,12 +1,13 @@
-# Zendesk Timer — 3 Observações Internas Automáticas
+# Zendesk Timer — 4 Observações Internas Automáticas
 
-Quando um ticket entra em **"Em Organização"** (Aberto), o serviço agenda **3 alertas**:
+Quando um ticket entra em **"Em Organização"** (Aberto), o serviço agenda **4 alertas**:
 
 | Timer | Mensagem |
 |-------|----------|
 | ⏱️ 10 min | Verifique se o prestador confirmou o recebimento. Caso contrário, ligue. |
 | ⚠️ 30 min | Próximos de ultrapassar o SLA! Cobre o prestador ou acione o próximo da IT! |
 | 🚨 55 min | ATENÇÃO! 60 MINUTOS PRÓXIMOS! Envie dados ou adéque expectativa! |
+| 🚨 60 min | ATENÇÃO! SLA EXCEDIDO! Envie dados imediatamente ou comunique o atraso. |
 
 Se o ticket sair de "Em Organização" antes do tempo, **todos os timers são cancelados**.
 
@@ -20,6 +21,7 @@ Se o ticket sair de "Em Organização" antes do tempo, **todos os timers são ca
 | `nota_em_org_10m_ok` | Observação de 10 min já foi adicionada |
 | `nota_em_org_30m_ok` | Observação de 30 min já foi adicionada |
 | `nota_em_org_55m_ok` | Observação de 55 min já foi adicionada |
+| `nota_em_org_60m_ok` | Observação de 60 min já foi adicionada |
 
 ---
 
