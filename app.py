@@ -36,7 +36,7 @@ CUSTOM_STATUS_ID = os.environ.get("CUSTOM_STATUS_ID", "50108859882131")
 POLLING_INTERVALO = int(os.environ.get("POLLING_INTERVALO", "120"))
 
 # ============================================================
-# 3 ALERTAS AUTOMÁTICOS
+# 4 ALERTAS AUTOMÁTICOS
 # ============================================================
 ALERTAS = [
     {
@@ -68,6 +68,17 @@ ALERTAS = [
             "ATENÇÃO! 60 MINUTOS PRÓXIMOS!\n"
             "Envie os dados de atendimento para o cliente, se já houver. "
             "Se não tivermos dados, adéque expectativa!"
+        ),
+    },
+    {
+        "nome": "60min_sla_ultrapassado",
+        "minutos": 60,
+        "tag": "nota_em_org_60m_ok",
+        "mensagem": (
+            "🚨 **60 MINUTOS em Organização — SLA ULTRAPASSADO**\n\n"
+            "ATENÇÃO! SLA EXCEDIDO!\n"
+            "Envie os dados de atendimento para o cliente imediatamente. "
+            "Se não houver dados, comunique o atraso e ajuste expectativas."
         ),
     },
 ]
