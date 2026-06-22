@@ -60,6 +60,9 @@ class RequesterResponseResult:
     total_response_minutes: Optional[float]
     response_count: int
     intervals: List[PendingToOpenInterval]
+    first_pending_at: Optional[datetime] = None
+    first_opened_at: Optional[datetime] = None
+    last_response_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -67,8 +70,24 @@ class RequesterResponseResult:
             "first_response_minutes": self.first_response_minutes,
             "total_response_minutes": self.total_response_minutes,
             "response_count": self.response_count,
+            "first_pending_at": self.first_pending_at.isoformat() if self.first_pending_at else None,
+            "first_opened_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
+            "last_response_at": self.last_response_at.isoformat() if self.last_response_at else None,
             "intervals": [interval.to_dict() for interval in self.intervals],
         }
+
+
+def _event_values(event: dict) -> set[str]:
+    values = set()
+    for key in ("value", "previous_value"):
+        raw = event.get(key)
+        if raw is None:
+            continue
+        if isinstance(raw, (list, tuple, set)):
+            values.update(str(v) for v in raw)
+        else:
+            values.update(str(raw).replace(",", " ").split())
+    return values
 
 
 def compute_first_pending_interval(
@@ -137,17 +156,37 @@ def compute_first_pending_interval(
 def compute_pending_to_open_response_times(
     audits: List[dict],
     ticket_id: int,
+    pending_tags: Optional[List[str]] = None,
 ) -> RequesterResponseResult:
     """Calcula respostas do solicitante: cada intervalo pending -> open.
 
     - primeira resposta: primeiro intervalo pending -> open
     - total: soma de todos os intervalos pending -> open
+    - se pending_tags for informado, so conta pendentes em que uma dessas tags
+      esta ativa no audit trail
     """
+    wanted_tags = set(pending_tags or [])
+    tag_active = False
     pending_started_at: Optional[datetime] = None
     intervals: List[PendingToOpenInterval] = []
 
     for audit in audits:
         audit_time = _parse_ts(audit["created_at"])
+        events = audit.get("events", [])
+        audit_tag_active = tag_active
+
+        if wanted_tags:
+            for ev in events:
+                if ev.get("field_name") != "tags":
+                    continue
+                values = _event_values(ev)
+                if values & wanted_tags:
+                    current = ev.get("value")
+                    if isinstance(current, (list, tuple, set)):
+                        audit_tag_active = bool(set(str(v) for v in current) & wanted_tags)
+                    else:
+                        audit_tag_active = bool(set(str(current or "").replace(",", " ").split()) & wanted_tags)
+
         for ev in audit.get("events", []):
             if ev.get("field_name") != "status":
                 continue
@@ -156,7 +195,7 @@ def compute_pending_to_open_response_times(
             prev = str(ev.get("previous_value")) if ev.get("previous_value") is not None else None
 
             if value == "pending" and prev != "pending":
-                pending_started_at = audit_time
+                pending_started_at = audit_time if not wanted_tags or audit_tag_active else None
                 continue
 
             if pending_started_at is not None and prev == "pending" and value != "pending":
@@ -170,6 +209,7 @@ def compute_pending_to_open_response_times(
                         )
                     )
                 pending_started_at = None
+        tag_active = audit_tag_active
 
     if not intervals:
         return RequesterResponseResult(
@@ -187,6 +227,9 @@ def compute_pending_to_open_response_times(
         total_response_minutes=total,
         response_count=len(intervals),
         intervals=intervals,
+        first_pending_at=intervals[0].entered_pending_at,
+        first_opened_at=intervals[0].opened_at,
+        last_response_at=intervals[-1].opened_at,
     )
 
 
