@@ -65,6 +65,7 @@ class RequesterResponseLog(Base):
     total_response_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     response_count: Mapped[int] = mapped_column(BigInteger, default=0)
     first_pending_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Nomes legados: hoje guardam a primeira/ultima saida de pending.
     first_opened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -89,6 +90,8 @@ class RequesterResponseLog(Base):
             else None,
             "response_count": self.response_count,
             "first_pending_at": self.first_pending_at.isoformat() if self.first_pending_at else None,
+            "first_exited_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
+            "last_exited_at": self.last_response_at.isoformat() if self.last_response_at else None,
             "first_opened_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
             "last_response_at": self.last_response_at.isoformat() if self.last_response_at else None,
             "ticket_form_id": self.ticket_form_id,
@@ -104,6 +107,8 @@ class RequesterResponseLog(Base):
             "pais": self.country,
             "primeira_resposta_minutos": self.first_response_minutes,
             "tempo_total_resposta_minutos": self.total_response_minutes,
+            "primeira_saida_pending_minutos": self.first_response_minutes,
+            "tempo_total_pending_minutos": self.total_response_minutes,
         }
 
 
