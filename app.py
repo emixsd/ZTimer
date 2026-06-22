@@ -138,7 +138,7 @@ def zendesk_timer_webhook():
 def zendesk_cancel_webhook():
     """Compatibilidade com o trigger antigo de desarme.
 
-    Ao sair de pending, recalcula o ticket para fechar o intervalo pending -> open
+    Ao sair de pending, recalcula o ticket para fechar o intervalo de pending
     e alimentar o dashboard.
     """
     if not _valid_webhook(request):
@@ -209,7 +209,7 @@ def sync_batch():
 
 @app.get("/requester-responses")
 def list_requester_responses():
-    """Métricas novas: primeira resposta e total pending -> open."""
+    """Métricas novas: primeira saída de pending e total em pending."""
     limit = min(int(request.args.get("limit", 100)), 1000)
     offset = int(request.args.get("offset", 0))
 
