@@ -289,7 +289,7 @@
     <header class="topbar">
       <div>
         <h1>Ztimer</h1>
-        <p class="subtitle">Seguro Viagem/N2 - resposta do solicitante</p>
+        <p class="subtitle">Seguro Viagem/N2 - tempo em pending</p>
       </div>
       <nav class="actions" aria-label="Ações do painel">
         <form class="filter-form" action="/dashboard" method="get">
@@ -310,12 +310,12 @@
       <article class="stat">
         <div class="stat-label">Primeira Resposta</div>
         <div class="stat-value">{{ "%.1f"|format(avg_first) if avg_first is not none else "-" }}</div>
-        <div class="stat-note">minutos em média</div>
+        <div class="stat-note">até sair de pending</div>
       </article>
       <article class="stat">
-        <div class="stat-label">Tempo Total</div>
+        <div class="stat-label">Tempo Total Pending</div>
         <div class="stat-value">{{ "%.1f"|format(avg_total) if avg_total is not none else "-" }}</div>
-        <div class="stat-note">minutos em média</div>
+        <div class="stat-note">soma dos períodos</div>
       </article>
       <article class="stat">
         <div class="stat-label">Filtro</div>
@@ -339,7 +339,7 @@
               <th>Email Solicitante</th>
               <th>País</th>
               <th class="number">Primeira Resposta</th>
-              <th class="number">Tempo Total</th>
+              <th class="number">Tempo Total Pending</th>
               <th>Status</th>
               <th>Calculado Em</th>
             </tr>
