@@ -1,6 +1,7 @@
 """API Flask para sincronizar métricas Zendesk, timers e exportação CSV."""
 import logging
 import os
+import time
 from datetime import date, datetime
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -42,6 +43,29 @@ def _payload_ticket_id(body: dict):
     if isinstance(ticket, dict) and ticket.get("id"):
         return int(ticket["id"])
     return None
+
+
+def _payload_event(body: dict) -> str:
+    return str(body.get("event") or body.get("type") or "").lower()
+
+
+def _event_is_pending_exit(event: str) -> bool:
+    return any(token in event for token in ("left", "exit", "cancel", "sai", "open"))
+
+
+def _result_ticket_status(result: dict):
+    if result.get("status") != "processed":
+        return None
+    response = result.get("response") or {}
+    return response.get("ticket_status")
+
+
+def _sync_ticket_from_webhook(ticket_id: int, retry_exit: bool = False) -> dict:
+    result = get_syncer().sync_ticket_id(ticket_id)
+    if retry_exit and _result_ticket_status(result) == "pending":
+        time.sleep(2)
+        result = get_syncer().sync_ticket_id(ticket_id)
+    return result
 
 
 def _parse_date(value: str):
@@ -130,7 +154,11 @@ def zendesk_timer_webhook():
     if ticket_id is None:
         return jsonify(error="payload inválido: informe ticket_id"), 400
 
-    result = get_syncer().sync_ticket_id(ticket_id)
+    event = _payload_event(body)
+    result = _sync_ticket_from_webhook(
+        ticket_id,
+        retry_exit=_event_is_pending_exit(event),
+    )
     return jsonify(status="processed", ticket_id=ticket_id, result=result)
 
 
@@ -149,7 +177,7 @@ def zendesk_cancel_webhook():
     if ticket_id is None:
         return jsonify(error="payload inválido: informe ticket_id"), 400
 
-    result = get_syncer().sync_ticket_id(ticket_id)
+    result = _sync_ticket_from_webhook(ticket_id, retry_exit=True)
     return jsonify(status="processed", ticket_id=ticket_id, result=result)
 
 
