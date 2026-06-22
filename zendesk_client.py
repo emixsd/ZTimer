@@ -125,6 +125,10 @@ class ZendeskClient:
         data = self._get("/api/v2/custom_statuses.json")
         return data.get("custom_statuses", [])
 
+    def get_ticket_field(self, field_id: int) -> Dict[str, Any]:
+        data = self._get(f"/api/v2/ticket_fields/{field_id}.json")
+        return data["ticket_field"]
+
     def update_ticket_custom_field(self, ticket_id: int, field_id: int, value) -> Dict[str, Any]:
         """Grava um valor em um campo customizado do ticket (PUT)."""
         payload = {"ticket": {"custom_fields": [{"id": field_id, "value": value}]}}
