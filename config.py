@@ -22,6 +22,7 @@ class Config:
     ZENDESK_SUBDOMAIN = os.getenv("ZENDESK_SUBDOMAIN", "")
     ZENDESK_EMAIL = os.getenv("ZENDESK_EMAIL", "")
     ZENDESK_API_TOKEN = os.getenv("ZENDESK_API_TOKEN", "")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
     # ID do campo de ticket (tipo Decimal) onde gravamos a duração em Pendente.
     # Crie o campo no Zendesk (Admin > Campos de ticket > Decimal) e cole o ID aqui.
