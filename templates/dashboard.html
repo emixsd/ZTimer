@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ztimer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #eef6f4;
+      --text: #17202a;
+      --muted: #687385;
+      --line: #dce2e8;
+      --accent: #137c6b;
+      --accent-dark: #0f5e52;
+      --danger: #b42318;
+      --warning: #a15c07;
+      --shadow: 0 8px 24px rgba(23, 32, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 36px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 650;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .button:hover {
+      border-color: var(--accent);
+    }
+
+    .button.primary:hover {
+      background: var(--accent-dark);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      min-height: 94px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      margin-top: 8px;
+      font-size: 26px;
+      font-weight: 780;
+    }
+
+    .stat-note {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 750;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 860px;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .ticket {
+      font-weight: 750;
+    }
+
+    .email {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .number {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #edf3fb;
+      color: #1f4d7a;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .empty {
+      padding: 34px 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        flex-direction: column;
+      }
+
+      .actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 520px) {
+      .shell {
+        width: min(100% - 20px, 1180px);
+        padding-top: 14px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .panel-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .meta {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>Ztimer</h1>
+        <p class="subtitle">Seguro Viagem/N2 - resposta do solicitante</p>
+      </div>
+      <nav class="actions" aria-label="Ações do painel">
+        <a class="button" href="/dashboard">Atualizar</a>
+        <a class="button primary" href="{{ export_url }}">Baixar CSV</a>
+      </nav>
+    </header>
+
+    <section class="stats" aria-label="Resumo">
+      <article class="stat">
+        <div class="stat-label">Tickets</div>
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-note">form {{ target_forms|join(", ") }}</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Primeira Resposta</div>
+        <div class="stat-value">{{ "%.1f"|format(avg_first) if avg_first is not none else "-" }}</div>
+        <div class="stat-note">minutos em média</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Tempo Total</div>
+        <div class="stat-value">{{ "%.1f"|format(avg_total) if avg_total is not none else "-" }}</div>
+        <div class="stat-note">minutos em média</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">País</div>
+        <div class="stat-value">{{ country_field }}</div>
+        <div class="stat-note">campo Zendesk</div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Tickets Processados</h2>
+        <div class="meta">Último cálculo: {{ last_sync if last_sync else "-" }}</div>
+      </div>
+
+      {% if rows %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Email Solicitante</th>
+              <th>País</th>
+              <th class="number">Primeira Resposta</th>
+              <th class="number">Tempo Total</th>
+              <th>Status</th>
+              <th>Calculado Em</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="ticket">{{ row.ticket_id }}</td>
+              <td class="email" title="{{ row.requester_email or '' }}">{{ row.requester_email or "-" }}</td>
+              <td>{{ row.country or "-" }}</td>
+              <td class="number">{{ "%.1f min"|format(row.first_response_minutes) if row.first_response_minutes is not none else "-" }}</td>
+              <td class="number">{{ "%.1f min"|format(row.total_response_minutes) if row.total_response_minutes is not none else "-" }}</td>
+              <td><span class="badge">{{ row.ticket_status or "-" }}</span></td>
+              <td>{{ row.computed_at or "-" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">Nenhum ticket processado ainda.</div>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
