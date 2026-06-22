@@ -2,7 +2,7 @@
 
 Novo fluxo principal:
   - so considera tickets do formulario configurado (Seguro Viagem/N2);
-  - calcula primeira resposta e tempo total do solicitante em pending -> open;
+  - calcula primeira resposta e tempo total do solicitante em pending;
   - grava log local exportavel para CSV/Excel;
   - enquanto o ticket segue em pending, adiciona observacoes internas por timer.
 """
@@ -20,7 +20,7 @@ from metrics import (
     PendingIntervalResult,
     RequesterResponseResult,
     compute_first_pending_interval,
-    compute_pending_to_open_response_times,
+    compute_pending_response_times,
     current_pending_started_at,
     resolve_custom_status_ids,
 )
@@ -35,6 +35,8 @@ EXPORT_FIELDNAMES = [
     "pais",
     "primeira_resposta_minutos",
     "tempo_total_resposta_minutos",
+    "primeira_saida_pending_minutos",
+    "tempo_total_pending_minutos",
 ]
 
 
@@ -162,8 +164,8 @@ class MetricSyncer:
             row.total_response_minutes = result.total_response_minutes
             row.response_count = result.response_count
             row.first_pending_at = result.first_pending_at
-            row.first_opened_at = result.first_opened_at
-            row.last_response_at = result.last_response_at
+            row.first_opened_at = result.first_exited_at
+            row.last_response_at = result.last_exited_at
             row.ticket_form_id = self._ticket_form_id(ticket)
             row.ticket_status = ticket.get("status")
             row.subject = (ticket.get("subject") or "")[:500]
@@ -243,7 +245,7 @@ class MetricSyncer:
             }
 
         audits = self.client.get_ticket_audits(ticket_id)
-        response_result = compute_pending_to_open_response_times(
+        response_result = compute_pending_response_times(
             audits,
             ticket_id,
             pending_tags=Config.RESPONSE_PENDING_TAGS,
