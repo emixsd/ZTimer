@@ -94,17 +94,17 @@ POST /zendesk/timer
 {"ticket_id": 12345}
 ```
 
-Webhook antigo de desarme:
+Webhook ao sair de Pendente:
 
 ```text
 POST /zendesk/cancelar
 {"ticket_id": 12345}
 ```
 
-A versão nova não mantém timer em memória. O `/zendesk/timer` processa o ticket,
-alimenta o dashboard e envia observações internas se ele ainda estiver em
-`pending`. Quando o ticket sai de `pending`, os próximos avisos deixam de ser
-enviados automaticamente.
+O `/zendesk/timer` processa a entrada em `pending`. O `/zendesk/cancelar`
+processa a saída de `pending`, fecha o intervalo `pending -> open` e alimenta o
+dashboard. Quando o ticket não está mais em `pending`, os próximos avisos deixam
+de ser enviados automaticamente.
 
 Processar uma lista:
 
