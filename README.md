@@ -25,7 +25,14 @@ primeira_resposta_minutos
 tempo_total_resposta_minutos
 ```
 
-3. Enquanto o ticket do formulário alvo estiver em `pending`, envia observações
+3. Mostra um painel HTML para o time consultar:
+
+```text
+/
+/dashboard
+```
+
+4. Enquanto o ticket do formulário alvo estiver em `pending`, envia observações
    internas para chamar atenção do agente:
 
 | Timer | Tag | Mensagem |
@@ -97,6 +104,12 @@ Ver métricas novas:
 
 ```bash
 curl localhost:5000/requester-responses
+```
+
+Painel HTML:
+
+```text
+http://localhost:5000/dashboard
 ```
 
 Exportar para Excel/Power Query:
