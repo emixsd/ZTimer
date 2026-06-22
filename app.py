@@ -23,6 +23,26 @@ def get_syncer() -> MetricSyncer:
     return _syncer
 
 
+def _valid_webhook(req) -> bool:
+    if not Config.WEBHOOK_SECRET:
+        return True
+    secret = req.headers.get("X-Webhook-Secret", "")
+    if secret == Config.WEBHOOK_SECRET:
+        return True
+    bearer = req.headers.get("Authorization", "").replace("Bearer ", "")
+    return bearer == Config.WEBHOOK_SECRET
+
+
+def _payload_ticket_id(body: dict):
+    for key in ("ticket_id", "id", "ticketId"):
+        if body.get(key):
+            return int(body[key])
+    ticket = body.get("ticket")
+    if isinstance(ticket, dict) and ticket.get("id"):
+        return int(ticket["id"])
+    return None
+
+
 @app.get("/")
 @app.get("/dashboard")
 def dashboard():
@@ -54,6 +74,39 @@ def dashboard():
         target_forms=Config.TARGET_TICKET_FORM_IDS,
         country_field=Config.COUNTRY_CUSTOM_FIELD_ID,
     )
+
+
+@app.post("/zendesk/timer")
+def zendesk_timer_webhook():
+    """Compatibilidade com o trigger antigo: processa o ticket e alimenta o painel."""
+    if not _valid_webhook(request):
+        return jsonify(error="unauthorized"), 401
+
+    body = request.get_json(silent=True) or {}
+    ticket_id = _payload_ticket_id(body)
+    if ticket_id is None:
+        return jsonify(error="payload inválido: informe ticket_id"), 400
+
+    result = get_syncer().sync_ticket_id(ticket_id)
+    return jsonify(status="processed", ticket_id=ticket_id, result=result)
+
+
+@app.post("/zendesk/cancelar")
+def zendesk_cancel_webhook():
+    """Compatibilidade com o trigger antigo de desarme.
+
+    A versão nova não mantém timer em memória; ao sair de pending, ela só deixa
+    de postar os próximos avisos.
+    """
+    if not _valid_webhook(request):
+        return jsonify(error="unauthorized"), 401
+
+    body = request.get_json(silent=True) or {}
+    ticket_id = _payload_ticket_id(body)
+    if ticket_id is None:
+        return jsonify(error="payload inválido: informe ticket_id"), 400
+
+    return jsonify(status="ignored_no_memory_timer", ticket_id=ticket_id)
 
 
 @app.get("/health")
