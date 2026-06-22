@@ -12,8 +12,8 @@ status monitorado == pending padrão do Zendesk
 ## O que ele faz
 
 1. Calcula quanto tempo o solicitante demorou para responder:
-   - primeira resposta: primeiro intervalo `pending -> open`
-   - total: soma de todos os intervalos `pending -> open`
+   - primeira resposta: tempo em `pending` até a primeira saída de `pending`
+   - total: soma de todos os períodos em `pending`
 
 2. Exporta para CSV, pronto para Excel/Power Query:
 
@@ -23,6 +23,8 @@ email_solicitante
 pais
 primeira_resposta_minutos
 tempo_total_resposta_minutos
+primeira_saida_pending_minutos
+tempo_total_pending_minutos
 ```
 
 3. Mostra um painel HTML para o time consultar:
@@ -78,9 +80,9 @@ RESPONSE_EXPORT_FILENAME=respostas_solicitantes.csv
 ```
 
 O campo `COUNTRY_CUSTOM_FIELD_ID` é uma lista suspensa do Zendesk; o CSV exporta
-o nome da opção quando a API retorna a lista de opções do campo. A métrica de
-primeira resposta considera apenas intervalos `pending -> open` em que a tag
-`aguard_retorno_cliente` estava ativa.
+o nome da opção quando a API retorna a lista de opções do campo. As métricas
+consideram apenas períodos em `pending` em que a tag `aguard_retorno_cliente`
+estava ativa.
 
 ## Uso
 
@@ -105,7 +107,7 @@ POST /zendesk/cancelar
 ```
 
 O `/zendesk/timer` processa a entrada em `pending`. O `/zendesk/cancelar`
-processa a saída de `pending`, fecha o intervalo `pending -> open` e alimenta o
+processa a saída de `pending`, fecha o intervalo em `pending` e alimenta o
 dashboard. Quando o ticket não está mais em `pending`, os próximos avisos deixam
 de ser enviados automaticamente.
 
@@ -157,7 +159,7 @@ exports/respostas_solicitantes.csv
 
 - `app.py` - rotas Flask
 - `sync.py` - orquestra Zendesk, cálculo, timers e exportação
-- `metrics.py` - cálculo dos intervalos `pending -> open`
+- `metrics.py` - cálculo dos períodos em `pending`
 - `zendesk_client.py` - cliente da API Zendesk
 - `models.py` - logs locais em SQLAlchemy
 - `config.py` - configuração por env
