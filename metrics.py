@@ -40,15 +40,17 @@ class PendingIntervalResult:
 
 
 @dataclass
-class PendingToOpenInterval:
+class PendingStatusInterval:
     entered_pending_at: datetime
-    opened_at: datetime
+    exited_pending_at: datetime
+    exit_to_status: Optional[str]
     duration_minutes: float
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "entered_pending_at": self.entered_pending_at.isoformat(),
-            "opened_at": self.opened_at.isoformat(),
+            "exited_pending_at": self.exited_pending_at.isoformat(),
+            "exit_to_status": self.exit_to_status,
             "duration_minutes": self.duration_minutes,
         }
 
@@ -59,10 +61,10 @@ class RequesterResponseResult:
     first_response_minutes: Optional[float]
     total_response_minutes: Optional[float]
     response_count: int
-    intervals: List[PendingToOpenInterval]
+    intervals: List[PendingStatusInterval]
     first_pending_at: Optional[datetime] = None
-    first_opened_at: Optional[datetime] = None
-    last_response_at: Optional[datetime] = None
+    first_exited_at: Optional[datetime] = None
+    last_exited_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -71,8 +73,8 @@ class RequesterResponseResult:
             "total_response_minutes": self.total_response_minutes,
             "response_count": self.response_count,
             "first_pending_at": self.first_pending_at.isoformat() if self.first_pending_at else None,
-            "first_opened_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
-            "last_response_at": self.last_response_at.isoformat() if self.last_response_at else None,
+            "first_exited_at": self.first_exited_at.isoformat() if self.first_exited_at else None,
+            "last_exited_at": self.last_exited_at.isoformat() if self.last_exited_at else None,
             "intervals": [interval.to_dict() for interval in self.intervals],
         }
 
@@ -153,22 +155,22 @@ def compute_first_pending_interval(
     )
 
 
-def compute_pending_to_open_response_times(
+def compute_pending_response_times(
     audits: List[dict],
     ticket_id: int,
     pending_tags: Optional[List[str]] = None,
 ) -> RequesterResponseResult:
-    """Calcula respostas do solicitante: cada intervalo pending -> open.
+    """Calcula tempo do solicitante: cada intervalo em pending ate a saida.
 
-    - primeira resposta: primeiro intervalo pending -> open
-    - total: soma de todos os intervalos pending -> open
+    - primeira resposta: primeiro intervalo pending -> qualquer status nao-pending
+    - total: soma de todos os intervalos pending -> qualquer status nao-pending
     - se pending_tags for informado, so conta pendentes em que uma dessas tags
       esta ativa no audit trail
     """
     wanted_tags = set(pending_tags or [])
     tag_active = False
     pending_started_at: Optional[datetime] = None
-    intervals: List[PendingToOpenInterval] = []
+    intervals: List[PendingStatusInterval] = []
 
     for audit in audits:
         audit_time = _parse_ts(audit["created_at"])
@@ -199,15 +201,15 @@ def compute_pending_to_open_response_times(
                 continue
 
             if pending_started_at is not None and prev == "pending" and value != "pending":
-                if value == "open":
-                    minutes = round((audit_time - pending_started_at).total_seconds() / 60, 2)
-                    intervals.append(
-                        PendingToOpenInterval(
-                            entered_pending_at=pending_started_at,
-                            opened_at=audit_time,
-                            duration_minutes=max(minutes, 0.0),
-                        )
+                minutes = round((audit_time - pending_started_at).total_seconds() / 60, 2)
+                intervals.append(
+                    PendingStatusInterval(
+                        entered_pending_at=pending_started_at,
+                        exited_pending_at=audit_time,
+                        exit_to_status=value,
+                        duration_minutes=max(minutes, 0.0),
                     )
+                )
                 pending_started_at = None
         tag_active = audit_tag_active
 
@@ -228,9 +230,12 @@ def compute_pending_to_open_response_times(
         response_count=len(intervals),
         intervals=intervals,
         first_pending_at=intervals[0].entered_pending_at,
-        first_opened_at=intervals[0].opened_at,
-        last_response_at=intervals[-1].opened_at,
+        first_exited_at=intervals[0].exited_pending_at,
+        last_exited_at=intervals[-1].exited_pending_at,
     )
+
+
+compute_pending_to_open_response_times = compute_pending_response_times
 
 
 def current_pending_started_at(
