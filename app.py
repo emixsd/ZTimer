@@ -95,8 +95,8 @@ def zendesk_timer_webhook():
 def zendesk_cancel_webhook():
     """Compatibilidade com o trigger antigo de desarme.
 
-    A versão nova não mantém timer em memória; ao sair de pending, ela só deixa
-    de postar os próximos avisos.
+    Ao sair de pending, recalcula o ticket para fechar o intervalo pending -> open
+    e alimentar o dashboard.
     """
     if not _valid_webhook(request):
         return jsonify(error="unauthorized"), 401
@@ -106,7 +106,8 @@ def zendesk_cancel_webhook():
     if ticket_id is None:
         return jsonify(error="payload inválido: informe ticket_id"), 400
 
-    return jsonify(status="ignored_no_memory_timer", ticket_id=ticket_id)
+    result = get_syncer().sync_ticket_id(ticket_id)
+    return jsonify(status="processed", ticket_id=ticket_id, result=result)
 
 
 @app.get("/health")
