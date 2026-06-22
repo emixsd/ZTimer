@@ -44,6 +44,7 @@ class MetricSyncer:
             Config.ZENDESK_SUBDOMAIN, Config.ZENDESK_EMAIL, Config.ZENDESK_API_TOKEN,
         )
         self._custom_ids: Optional[Dict[int, str]] = None
+        self._country_options: Optional[Dict[str, str]] = None
 
     # -- resolucao do que conta como "Pendente" (legado) --------------- #
     def _measure_args(self) -> dict:
@@ -71,6 +72,23 @@ class MetricSyncer:
             if int(field.get("id")) == field_id:
                 return field.get("value")
         return None
+
+    def _country_label(self, ticket: dict) -> Optional[str]:
+        value = self._custom_field_value(ticket, Config.COUNTRY_CUSTOM_FIELD_ID)
+        if value is None:
+            return None
+        if self._country_options is None:
+            self._country_options = {}
+            try:
+                field = self.client.get_ticket_field(Config.COUNTRY_CUSTOM_FIELD_ID)
+                for option in field.get("custom_field_options") or []:
+                    option_value = str(option.get("value") or "")
+                    label = option.get("name") or option.get("raw_name") or option_value
+                    if option_value:
+                        self._country_options[option_value] = label
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Nao foi possivel carregar opcoes do campo pais: %s", exc)
+        return self._country_options.get(str(value), str(value))
 
     def _requester_email(self, ticket: dict) -> Optional[str]:
         requester_id = ticket.get("requester_id")
@@ -143,6 +161,9 @@ class MetricSyncer:
             row.first_response_minutes = result.first_response_minutes
             row.total_response_minutes = result.total_response_minutes
             row.response_count = result.response_count
+            row.first_pending_at = result.first_pending_at
+            row.first_opened_at = result.first_opened_at
+            row.last_response_at = result.last_response_at
             row.ticket_form_id = self._ticket_form_id(ticket)
             row.ticket_status = ticket.get("status")
             row.subject = (ticket.get("subject") or "")[:500]
@@ -222,9 +243,13 @@ class MetricSyncer:
             }
 
         audits = self.client.get_ticket_audits(ticket_id)
-        response_result = compute_pending_to_open_response_times(audits, ticket_id)
+        response_result = compute_pending_to_open_response_times(
+            audits,
+            ticket_id,
+            pending_tags=Config.RESPONSE_PENDING_TAGS,
+        )
         requester_email = self._requester_email(ticket)
-        country = self._custom_field_value(ticket, Config.COUNTRY_CUSTOM_FIELD_ID)
+        country = self._country_label(ticket)
         row = self.upsert_response(ticket, response_result, requester_email, country)
         timer = self.process_pending_timers(ticket, audits)
 
