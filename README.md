@@ -68,6 +68,7 @@ WEBHOOK_SECRET=
 
 TARGET_TICKET_FORM_IDS=52281638323859
 COUNTRY_CUSTOM_FIELD_ID=44008169716755
+RESPONSE_PENDING_TAGS=aguard_retorno_cliente
 
 DATABASE_URL=sqlite:///metrics.db
 DEFAULT_SYNC_QUERY=type:ticket
@@ -77,7 +78,9 @@ RESPONSE_EXPORT_FILENAME=respostas_solicitantes.csv
 ```
 
 O campo `COUNTRY_CUSTOM_FIELD_ID` é uma lista suspensa do Zendesk; o CSV exporta
-o valor salvo no ticket.
+o nome da opção quando a API retorna a lista de opções do campo. A métrica de
+primeira resposta considera apenas intervalos `pending -> open` em que a tag
+`aguard_retorno_cliente` estava ativa.
 
 ## Uso
 
@@ -130,6 +133,12 @@ Painel HTML:
 
 ```text
 http://localhost:5000/dashboard
+```
+
+Filtro por dia:
+
+```text
+http://localhost:5000/dashboard?date=2026-06-22
 ```
 
 Exportar para Excel/Power Query:
