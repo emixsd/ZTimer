@@ -7,7 +7,7 @@ escrito de volta no campo do Zendesk. O dashboard "oficial" é o Explore
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, String, create_engine
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, String, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from config import Config
@@ -64,6 +64,9 @@ class RequesterResponseLog(Base):
     first_response_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     total_response_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     response_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    first_pending_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_opened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     ticket_form_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     ticket_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -85,6 +88,9 @@ class RequesterResponseLog(Base):
             if self.total_response_minutes is not None
             else None,
             "response_count": self.response_count,
+            "first_pending_at": self.first_pending_at.isoformat() if self.first_pending_at else None,
+            "first_opened_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
+            "last_response_at": self.last_response_at.isoformat() if self.last_response_at else None,
             "ticket_form_id": self.ticket_form_id,
             "ticket_status": self.ticket_status,
             "subject": self.subject,
@@ -107,6 +113,37 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    inspector = inspect(engine)
+    if "requester_response_log" not in inspector.get_table_names():
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("requester_response_log")}
+    needed = {
+        "first_pending_at": "DateTime",
+        "first_opened_at": "DateTime",
+        "last_response_at": "DateTime",
+    }
+    missing = {name: kind for name, kind in needed.items() if name not in existing}
+    if not missing:
+        return
+
+    type_map = {
+        "sqlite": {"DateTime": "DATETIME"},
+        "postgresql": {"DateTime": "TIMESTAMP WITH TIME ZONE"},
+    }
+    dialect_types = type_map.get(engine.dialect.name, type_map["sqlite"])
+    with engine.begin() as conn:
+        for name, kind in missing.items():
+            conn.execute(
+                text(
+                    f"ALTER TABLE requester_response_log "
+                    f"ADD COLUMN {name} {dialect_types[kind]}"
+                )
+            )
 
 
 def utcnow() -> datetime:
