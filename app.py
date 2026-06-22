@@ -2,7 +2,7 @@
 import logging
 import os
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, render_template, request
 from sqlalchemy import func, select
 
 from config import Config
@@ -21,6 +21,39 @@ def get_syncer() -> MetricSyncer:
     if _syncer is None:
         _syncer = MetricSyncer()
     return _syncer
+
+
+@app.get("/")
+@app.get("/dashboard")
+def dashboard():
+    """Painel HTML de consulta para o time."""
+    limit = min(int(request.args.get("limit", 100)), 500)
+
+    with SessionLocal() as session:
+        m = RequesterResponseLog
+        total, avg_first, avg_total, last_sync = session.execute(
+            select(
+                func.count(m.ticket_id),
+                func.avg(m.first_response_minutes),
+                func.avg(m.total_response_minutes),
+                func.max(m.computed_at),
+            )
+        ).one()
+        rows = session.execute(
+            select(m).order_by(m.computed_at.desc()).limit(limit)
+        ).scalars().all()
+
+    return render_template(
+        "dashboard.html",
+        rows=[row.to_dict() for row in rows],
+        total=total or 0,
+        avg_first=round(avg_first, 1) if avg_first is not None else None,
+        avg_total=round(avg_total, 1) if avg_total is not None else None,
+        last_sync=last_sync.isoformat() if last_sync else None,
+        export_url="/export/respostas.csv",
+        target_forms=Config.TARGET_TICKET_FORM_IDS,
+        country_field=Config.COUNTRY_CUSTOM_FIELD_ID,
+    )
 
 
 @app.get("/health")
