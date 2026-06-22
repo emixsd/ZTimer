@@ -21,6 +21,10 @@ def _parse_ts(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _sorted_audits(audits: List[dict]) -> List[dict]:
+    return sorted(audits, key=lambda audit: _parse_ts(audit["created_at"]))
+
+
 @dataclass
 class PendingIntervalResult:
     ticket_id: int
@@ -112,7 +116,7 @@ def compute_first_pending_interval(
     exited_at: Optional[datetime] = None
     exit_to: Optional[str] = None
 
-    for audit in audits:
+    for audit in _sorted_audits(audits):
         audit_time = _parse_ts(audit["created_at"])
         for ev in audit.get("events", []):
             if ev.get("field_name") != field_name:
@@ -172,7 +176,7 @@ def compute_pending_response_times(
     pending_started_at: Optional[datetime] = None
     intervals: List[PendingStatusInterval] = []
 
-    for audit in audits:
+    for audit in _sorted_audits(audits):
         audit_time = _parse_ts(audit["created_at"])
         events = audit.get("events", [])
         audit_tag_active = tag_active
@@ -248,7 +252,7 @@ def current_pending_started_at(
         return None
 
     pending_started_at: Optional[datetime] = None
-    for audit in audits:
+    for audit in _sorted_audits(audits):
         audit_time = _parse_ts(audit["created_at"])
         for ev in audit.get("events", []):
             if ev.get("field_name") != "status":
