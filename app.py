@@ -1,6 +1,7 @@
 """API Flask para sincronizar métricas Zendesk, timers e exportação CSV."""
 import logging
 import os
+from datetime import date, datetime
 
 from flask import Flask, Response, jsonify, render_template, request
 from sqlalchemy import func, select
@@ -43,25 +44,66 @@ def _payload_ticket_id(body: dict):
     return None
 
 
+def _parse_date(value: str):
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _row_reference_date(row: RequesterResponseLog):
+    dt = row.first_opened_at or row.computed_at
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
+    return dt.date()
+
+
 @app.get("/")
 @app.get("/dashboard")
 def dashboard():
     """Painel HTML de consulta para o time."""
     limit = min(int(request.args.get("limit", 100)), 500)
+    selected_date_raw = request.args.get("date", "")
+    selected_date = _parse_date(selected_date_raw)
 
     with SessionLocal() as session:
         m = RequesterResponseLog
-        total, avg_first, avg_total, last_sync = session.execute(
-            select(
-                func.count(m.ticket_id),
-                func.avg(m.first_response_minutes),
-                func.avg(m.total_response_minutes),
-                func.max(m.computed_at),
-            )
-        ).one()
-        rows = session.execute(
-            select(m).order_by(m.computed_at.desc()).limit(limit)
-        ).scalars().all()
+        if selected_date:
+            all_rows = session.execute(
+                select(m).order_by(m.computed_at.desc())
+            ).scalars().all()
+            rows = [
+                row for row in all_rows
+                if _row_reference_date(row) == selected_date
+            ][:limit]
+            total = len(rows)
+            first_values = [
+                row.first_response_minutes for row in rows
+                if row.first_response_minutes is not None
+            ]
+            total_values = [
+                row.total_response_minutes for row in rows
+                if row.total_response_minutes is not None
+            ]
+            avg_first = sum(first_values) / len(first_values) if first_values else None
+            avg_total = sum(total_values) / len(total_values) if total_values else None
+            last_sync = max((row.computed_at for row in rows if row.computed_at), default=None)
+        else:
+            total, avg_first, avg_total, last_sync = session.execute(
+                select(
+                    func.count(m.ticket_id),
+                    func.avg(m.first_response_minutes),
+                    func.avg(m.total_response_minutes),
+                    func.max(m.computed_at),
+                )
+            ).one()
+            rows = session.execute(
+                select(m).order_by(m.computed_at.desc()).limit(limit)
+            ).scalars().all()
 
     return render_template(
         "dashboard.html",
@@ -73,6 +115,7 @@ def dashboard():
         export_url="/export/respostas.csv",
         target_forms=Config.TARGET_TICKET_FORM_IDS,
         country_field=Config.COUNTRY_CUSTOM_FIELD_ID,
+        selected_date=selected_date.isoformat() if selected_date else "",
     )
 
 
@@ -119,6 +162,7 @@ def health():
         field_unit=Config.FIELD_UNIT,
         target_ticket_form_ids=Config.TARGET_TICKET_FORM_IDS,
         country_custom_field_id=Config.COUNTRY_CUSTOM_FIELD_ID,
+        response_pending_tags=Config.RESPONSE_PENDING_TAGS,
     )
 
 
