@@ -31,6 +31,11 @@ class Config:
     # Novo fluxo Seguro Viagem/N2.
     TARGET_TICKET_FORM_IDS = _int_list_env("TARGET_TICKET_FORM_IDS", "52281638323859")
     COUNTRY_CUSTOM_FIELD_ID = _int_env("COUNTRY_CUSTOM_FIELD_ID", "44008169716755")
+    RESPONSE_PENDING_TAGS = [
+        s.strip()
+        for s in os.getenv("RESPONSE_PENDING_TAGS", "aguard_retorno_cliente").split(",")
+        if s.strip()
+    ]
 
     # Modo de medição:
     #   "base_status"   -> mede o status base 'pending' (Pendente padrão). [padrão]
