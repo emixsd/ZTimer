@@ -68,6 +68,24 @@
       flex-wrap: wrap;
     }
 
+    .filter-form {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .date-input {
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+    }
+
     .button {
       display: inline-flex;
       align-items: center;
@@ -274,7 +292,11 @@
         <p class="subtitle">Seguro Viagem/N2 - resposta do solicitante</p>
       </div>
       <nav class="actions" aria-label="Ações do painel">
-        <a class="button" href="/dashboard">Atualizar</a>
+        <form class="filter-form" action="/dashboard" method="get">
+          <input class="date-input" type="date" name="date" value="{{ selected_date }}">
+          <button class="button" type="submit">Filtrar</button>
+        </form>
+        <a class="button" href="/dashboard">Limpar</a>
         <a class="button primary" href="{{ export_url }}">Baixar CSV</a>
       </nav>
     </header>
@@ -296,9 +318,9 @@
         <div class="stat-note">minutos em média</div>
       </article>
       <article class="stat">
-        <div class="stat-label">País</div>
-        <div class="stat-value">{{ country_field }}</div>
-        <div class="stat-note">campo Zendesk</div>
+        <div class="stat-label">Filtro</div>
+        <div class="stat-value">{{ selected_date if selected_date else "Todos" }}</div>
+        <div class="stat-note">dia da resposta</div>
       </article>
     </section>
 
