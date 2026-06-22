@@ -12,6 +12,8 @@ services:
         sync: false
       - key: ZENDESK_API_TOKEN
         sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
       - key: TARGET_TICKET_FORM_IDS
         value: "52281638323859"
       - key: COUNTRY_CUSTOM_FIELD_ID
