@@ -18,6 +18,8 @@ services:
         value: "52281638323859"
       - key: COUNTRY_CUSTOM_FIELD_ID
         value: "44008169716755"
+      - key: RESPONSE_PENDING_TAGS
+        value: "aguard_retorno_cliente"
       - key: DATABASE_URL
         value: "sqlite:///metrics.db"
       - key: DEFAULT_SYNC_QUERY
