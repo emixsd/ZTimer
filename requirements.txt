@@ -1,3 +1,7 @@
-flask==3.1.0
-requests==2.32.3
-gunicorn==23.0.0
+Flask>=3.0
+requests>=2.31
+SQLAlchemy>=2.0
+python-dotenv>=1.0
+gunicorn>=21.2
+# Postgres (produção). Descomente se for usar:
+# psycopg2-binary>=2.9
