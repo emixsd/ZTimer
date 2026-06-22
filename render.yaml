@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: zendesk-timer
+    name: ztimer
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
@@ -12,9 +12,17 @@ services:
         sync: false
       - key: ZENDESK_API_TOKEN
         sync: false
-      - key: CUSTOM_STATUS_ID
-        value: "50108859882131"
-      - key: WEBHOOK_SECRET
-        sync: false
-      - key: POLLING_INTERVALO
-        value: "120"
+      - key: TARGET_TICKET_FORM_IDS
+        value: "52281638323859"
+      - key: COUNTRY_CUSTOM_FIELD_ID
+        value: "44008169716755"
+      - key: DATABASE_URL
+        value: "sqlite:///metrics.db"
+      - key: DEFAULT_SYNC_QUERY
+        value: "type:ticket"
+      - key: EXPORT_DIR
+        value: "exports"
+      - key: RESPONSE_EXPORT_FILENAME
+        value: "respostas_solicitantes.csv"
+      - key: FLASK_DEBUG
+        value: "false"
