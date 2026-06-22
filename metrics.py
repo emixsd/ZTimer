@@ -1,0 +1,233 @@
+"""Cálculo do "cronômetro" de tempo em status Pendente.
+
+Regra (definida com o time):
+  - Inicia quando o ticket entra em Pendente pela 1ª vez (entered_at).
+  - Para quando o ticket sai de Pendente (exited_at).
+  - O valor é a duração corrida (24h/dia) entre os dois, em minutos.
+  - Só o 1º intervalo conta; idas e voltas posteriores são ignoradas.
+
+Fonte de verdade: a Ticket Audits API. Mudança de status aparece como
+evento Change com field_name == "status" (valores base: new/open/pending/
+hold/solved/closed). Opcionalmente dá pra medir por status custom usando
+field_name == "custom_status_id".
+"""
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+
+def _parse_ts(value: str) -> datetime:
+    """Converte timestamp ISO do Zendesk (…Z) em datetime aware (UTC)."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+@dataclass
+class PendingIntervalResult:
+    ticket_id: int
+    entered_pending: bool                  # chegou a entrar em Pendente?
+    entered_pending_at: Optional[datetime]
+    exited_pending_at: Optional[datetime]
+    exit_to_status: Optional[str]          # para qual status saiu
+    duration_minutes: Optional[float]      # MÉTRICA: minutos no 1º intervalo
+    still_pending: bool                    # entrou mas ainda não saiu
+    elapsed_minutes_so_far: Optional[float]
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        for k in ("entered_pending_at", "exited_pending_at"):
+            d[k] = d[k].isoformat() if d[k] else None
+        return d
+
+
+@dataclass
+class PendingToOpenInterval:
+    entered_pending_at: datetime
+    opened_at: datetime
+    duration_minutes: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "entered_pending_at": self.entered_pending_at.isoformat(),
+            "opened_at": self.opened_at.isoformat(),
+            "duration_minutes": self.duration_minutes,
+        }
+
+
+@dataclass
+class RequesterResponseResult:
+    ticket_id: int
+    first_response_minutes: Optional[float]
+    total_response_minutes: Optional[float]
+    response_count: int
+    intervals: List[PendingToOpenInterval]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ticket_id": self.ticket_id,
+            "first_response_minutes": self.first_response_minutes,
+            "total_response_minutes": self.total_response_minutes,
+            "response_count": self.response_count,
+            "intervals": [interval.to_dict() for interval in self.intervals],
+        }
+
+
+def compute_first_pending_interval(
+    audits: List[dict],
+    ticket_id: int,
+    pending_value: str = "pending",
+    field_name: str = "status",
+    now: Optional[datetime] = None,
+) -> PendingIntervalResult:
+    """
+    audits        : audits em ordem cronológica crescente.
+    pending_value : valor que representa "Pendente" ('pending' para status base,
+                    ou o id do status custom quando field_name='custom_status_id').
+    field_name    : 'status' (padrão) ou 'custom_status_id'.
+    """
+    now = now or datetime.now(timezone.utc)
+    pending_value = str(pending_value)
+
+    entered_at: Optional[datetime] = None
+    exited_at: Optional[datetime] = None
+    exit_to: Optional[str] = None
+
+    for audit in audits:
+        audit_time = _parse_ts(audit["created_at"])
+        for ev in audit.get("events", []):
+            if ev.get("field_name") != field_name:
+                continue
+            value = str(ev.get("value")) if ev.get("value") is not None else None
+            prev = str(ev.get("previous_value")) if ev.get("previous_value") is not None else None
+
+            # Início do cronômetro: 1ª entrada em Pendente.
+            if entered_at is None and value == pending_value:
+                entered_at = audit_time
+            # Parada do cronômetro: saiu de Pendente.
+            elif entered_at is not None and exited_at is None and prev == pending_value and value != pending_value:
+                exited_at = audit_time
+                exit_to = value
+        if entered_at is not None and exited_at is not None:
+            break
+
+    if entered_at is None:
+        return PendingIntervalResult(
+            ticket_id=ticket_id, entered_pending=False, entered_pending_at=None,
+            exited_pending_at=None, exit_to_status=None, duration_minutes=None,
+            still_pending=False, elapsed_minutes_so_far=None,
+        )
+
+    if exited_at is not None:
+        minutes = round((exited_at - entered_at).total_seconds() / 60, 2)
+        return PendingIntervalResult(
+            ticket_id=ticket_id, entered_pending=True, entered_pending_at=entered_at,
+            exited_pending_at=exited_at, exit_to_status=exit_to,
+            duration_minutes=max(minutes, 0.0), still_pending=False,
+            elapsed_minutes_so_far=None,
+        )
+
+    # Entrou mas ainda está em Pendente: cronômetro rodando.
+    return PendingIntervalResult(
+        ticket_id=ticket_id, entered_pending=True, entered_pending_at=entered_at,
+        exited_pending_at=None, exit_to_status=None, duration_minutes=None,
+        still_pending=True,
+        elapsed_minutes_so_far=round((now - entered_at).total_seconds() / 60, 2),
+    )
+
+
+def compute_pending_to_open_response_times(
+    audits: List[dict],
+    ticket_id: int,
+) -> RequesterResponseResult:
+    """Calcula respostas do solicitante: cada intervalo pending -> open.
+
+    - primeira resposta: primeiro intervalo pending -> open
+    - total: soma de todos os intervalos pending -> open
+    """
+    pending_started_at: Optional[datetime] = None
+    intervals: List[PendingToOpenInterval] = []
+
+    for audit in audits:
+        audit_time = _parse_ts(audit["created_at"])
+        for ev in audit.get("events", []):
+            if ev.get("field_name") != "status":
+                continue
+
+            value = str(ev.get("value")) if ev.get("value") is not None else None
+            prev = str(ev.get("previous_value")) if ev.get("previous_value") is not None else None
+
+            if value == "pending" and prev != "pending":
+                pending_started_at = audit_time
+                continue
+
+            if pending_started_at is not None and prev == "pending" and value != "pending":
+                if value == "open":
+                    minutes = round((audit_time - pending_started_at).total_seconds() / 60, 2)
+                    intervals.append(
+                        PendingToOpenInterval(
+                            entered_pending_at=pending_started_at,
+                            opened_at=audit_time,
+                            duration_minutes=max(minutes, 0.0),
+                        )
+                    )
+                pending_started_at = None
+
+    if not intervals:
+        return RequesterResponseResult(
+            ticket_id=ticket_id,
+            first_response_minutes=None,
+            total_response_minutes=None,
+            response_count=0,
+            intervals=[],
+        )
+
+    total = round(sum(interval.duration_minutes for interval in intervals), 2)
+    return RequesterResponseResult(
+        ticket_id=ticket_id,
+        first_response_minutes=intervals[0].duration_minutes,
+        total_response_minutes=total,
+        response_count=len(intervals),
+        intervals=intervals,
+    )
+
+
+def current_pending_started_at(
+    audits: List[dict],
+    current_status: Optional[str],
+    ticket_created_at: Optional[str] = None,
+) -> Optional[datetime]:
+    """Retorna quando o intervalo pending atual comecou, se ainda estiver pending."""
+    if current_status != "pending":
+        return None
+
+    pending_started_at: Optional[datetime] = None
+    for audit in audits:
+        audit_time = _parse_ts(audit["created_at"])
+        for ev in audit.get("events", []):
+            if ev.get("field_name") != "status":
+                continue
+
+            value = str(ev.get("value")) if ev.get("value") is not None else None
+            prev = str(ev.get("previous_value")) if ev.get("previous_value") is not None else None
+
+            if value == "pending" and prev != "pending":
+                pending_started_at = audit_time
+            elif prev == "pending" and value != "pending":
+                pending_started_at = None
+
+    if pending_started_at is None and ticket_created_at:
+        return _parse_ts(ticket_created_at)
+    return pending_started_at
+
+
+def resolve_custom_status_ids(custom_statuses: List[dict], target_labels: List[str]) -> Dict[int, str]:
+    """Mapeia rótulos -> {custom_status_id: rótulo} (modo custom_status, opcional).
+    Compara agent_label e end_user_label (case-insensitive)."""
+    wanted = {lbl.strip().lower(): lbl for lbl in target_labels}
+    result: Dict[int, str] = {}
+    for cs in custom_statuses:
+        for lab in [(cs.get("agent_label") or "").strip().lower(),
+                    (cs.get("end_user_label") or "").strip().lower()]:
+            if lab in wanted:
+                result[int(cs["id"])] = cs.get("agent_label") or wanted[lab]
+                break
+    return result
