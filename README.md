@@ -64,6 +64,7 @@ Principais variáveis:
 ZENDESK_SUBDOMAIN=suaempresa
 ZENDESK_EMAIL=voce@suaempresa.com
 ZENDESK_API_TOKEN=seu_token_de_api
+WEBHOOK_SECRET=
 
 TARGET_TICKET_FORM_IDS=52281638323859
 COUNTRY_CUSTOM_FIELD_ID=44008169716755
@@ -85,6 +86,25 @@ Processar um ticket:
 ```bash
 curl -X POST localhost:5000/tickets/12345/sync
 ```
+
+Webhook do Zendesk ao entrar em Pendente:
+
+```text
+POST /zendesk/timer
+{"ticket_id": 12345}
+```
+
+Webhook antigo de desarme:
+
+```text
+POST /zendesk/cancelar
+{"ticket_id": 12345}
+```
+
+A versão nova não mantém timer em memória. O `/zendesk/timer` processa o ticket,
+alimenta o dashboard e envia observações internas se ele ainda estiver em
+`pending`. Quando o ticket sai de `pending`, os próximos avisos deixam de ser
+enviados automaticamente.
 
 Processar uma lista:
 
