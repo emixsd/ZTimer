@@ -86,6 +86,16 @@
       font-weight: 600;
     }
 
+    .date-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
     .button {
       display: inline-flex;
       align-items: center;
@@ -107,12 +117,25 @@
       color: #ffffff;
     }
 
+    .button.danger {
+      min-height: 30px;
+      padding: 5px 9px;
+      border-color: #f1c8c3;
+      color: var(--danger);
+      background: #fff7f6;
+      font-size: 13px;
+    }
+
     .button:hover {
       border-color: var(--accent);
     }
 
     .button.primary:hover {
       background: var(--accent-dark);
+    }
+
+    .button.danger:hover {
+      border-color: var(--danger);
     }
 
     .stats {
@@ -186,7 +209,7 @@
 
     table {
       width: 100%;
-      min-width: 860px;
+      min-width: 960px;
       border-collapse: collapse;
     }
 
@@ -293,7 +316,14 @@
       </div>
       <nav class="actions" aria-label="Ações do painel">
         <form class="filter-form" action="/dashboard" method="get">
-          <input class="date-input" type="date" name="date" value="{{ selected_date }}">
+          <label class="date-field">
+            <span>De</span>
+            <input class="date-input" type="date" name="date_from" value="{{ date_from }}">
+          </label>
+          <label class="date-field">
+            <span>Até</span>
+            <input class="date-input" type="date" name="date_to" value="{{ date_to }}">
+          </label>
           <button class="button" type="submit">Filtrar</button>
         </form>
         <a class="button" href="/dashboard">Limpar</a>
@@ -319,8 +349,8 @@
       </article>
       <article class="stat">
         <div class="stat-label">Filtro</div>
-        <div class="stat-value">{{ selected_date if selected_date else "Todos" }}</div>
-        <div class="stat-note">dia da resposta</div>
+        <div class="stat-value">{{ filter_label }}</div>
+        <div class="stat-note">período da resposta</div>
       </article>
     </section>
 
@@ -342,6 +372,7 @@
               <th class="number">Tempo Total Pending</th>
               <th>Status</th>
               <th>Calculado Em</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -354,6 +385,14 @@
               <td class="number">{{ "%.1f min"|format(row.total_response_minutes) if row.total_response_minutes is not none else "-" }}</td>
               <td><span class="badge">{{ row.ticket_status or "-" }}</span></td>
               <td>{{ row.computed_at or "-" }}</td>
+              <td>
+                <form method="post" action="/requester-responses/{{ row.ticket_id }}/delete" onsubmit="return confirm('Excluir este ticket do painel?');">
+                  <input type="hidden" name="date_from" value="{{ date_from }}">
+                  <input type="hidden" name="date_to" value="{{ date_to }}">
+                  <input type="hidden" name="limit" value="{{ limit }}">
+                  <button class="button danger" type="submit">Excluir</button>
+                </form>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
