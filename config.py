@@ -17,6 +17,10 @@ def _int_list_env(name: str, default: str) -> list[int]:
     return [int(v.strip()) for v in values.split(",") if v.strip()]
 
 
+def _bool_env(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     # --- Zendesk ---
     ZENDESK_SUBDOMAIN = os.getenv("ZENDESK_SUBDOMAIN", "")
@@ -57,6 +61,15 @@ class Config:
 
     # Busca padrão do Zendesk usada por POST /sync sem corpo.
     DEFAULT_SYNC_QUERY = os.getenv("DEFAULT_SYNC_QUERY", "type:ticket")
+
+    # Varredura automática para os avisos de 10/30/55/60 min.
+    PENDING_TIMER_LOOP_ENABLED = _bool_env("PENDING_TIMER_LOOP_ENABLED", "true")
+    PENDING_TIMER_LOOP_INTERVAL_SECONDS = int(
+        os.getenv("PENDING_TIMER_LOOP_INTERVAL_SECONDS", "300")
+    )
+    PENDING_TIMER_SYNC_QUERY = os.getenv(
+        "PENDING_TIMER_SYNC_QUERY", "type:ticket status:pending"
+    )
 
     # Exportação consumida pelo Excel/Power Query.
     EXPORT_DIR = os.getenv("EXPORT_DIR", "exports")
