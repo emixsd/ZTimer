@@ -4,12 +4,12 @@ import os
 import time
 from datetime import date, datetime
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import func, select
 
 from config import Config
 from models import PendingTimeLog, RequesterResponseLog, SessionLocal, init_db
-from sync import MetricSyncer, response_metrics_csv_from_db
+from sync import MetricSyncer, export_response_metrics_file, response_metrics_csv_from_db
 
 logging.basicConfig(level=logging.INFO)
 
@@ -86,48 +86,80 @@ def _row_reference_date(row: RequesterResponseLog):
     return dt.date()
 
 
+def _date_range_label(date_from, date_to) -> str:
+    if date_from and date_to:
+        return f"{date_from.isoformat()} a {date_to.isoformat()}"
+    if date_from:
+        return f"Desde {date_from.isoformat()}"
+    if date_to:
+        return f"Até {date_to.isoformat()}"
+    return "Todos"
+
+
+def _row_in_date_range(row: RequesterResponseLog, date_from, date_to) -> bool:
+    row_date = _row_reference_date(row)
+    if row_date is None:
+        return False
+    if date_from and row_date < date_from:
+        return False
+    if date_to and row_date > date_to:
+        return False
+    return True
+
+
+def _dashboard_args_from_form(form) -> dict:
+    args = {}
+    for key in ("date_from", "date_to", "limit"):
+        value = form.get(key)
+        if value:
+            args[key] = value
+    return args
+
+
 @app.get("/")
 @app.get("/dashboard")
 def dashboard():
     """Painel HTML de consulta para o time."""
     limit = min(int(request.args.get("limit", 100)), 500)
-    selected_date_raw = request.args.get("date", "")
-    selected_date = _parse_date(selected_date_raw)
+    legacy_date_raw = request.args.get("date", "")
+    date_from_raw = request.args.get("date_from", "")
+    date_to_raw = request.args.get("date_to", "")
+    if legacy_date_raw and not date_from_raw and not date_to_raw:
+        date_from_raw = legacy_date_raw
+        date_to_raw = legacy_date_raw
+    date_from = _parse_date(date_from_raw)
+    date_to = _parse_date(date_to_raw)
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+        date_from_raw, date_to_raw = date_to_raw, date_from_raw
 
     with SessionLocal() as session:
         m = RequesterResponseLog
-        if selected_date:
-            all_rows = session.execute(
-                select(m).order_by(m.computed_at.desc())
-            ).scalars().all()
-            rows = [
-                row for row in all_rows
-                if _row_reference_date(row) == selected_date
-            ][:limit]
-            total = len(rows)
-            first_values = [
-                row.first_response_minutes for row in rows
-                if row.first_response_minutes is not None
-            ]
-            total_values = [
-                row.total_response_minutes for row in rows
-                if row.total_response_minutes is not None
-            ]
-            avg_first = sum(first_values) / len(first_values) if first_values else None
-            avg_total = sum(total_values) / len(total_values) if total_values else None
-            last_sync = max((row.computed_at for row in rows if row.computed_at), default=None)
-        else:
-            total, avg_first, avg_total, last_sync = session.execute(
-                select(
-                    func.count(m.ticket_id),
-                    func.avg(m.first_response_minutes),
-                    func.avg(m.total_response_minutes),
-                    func.max(m.computed_at),
-                )
-            ).one()
-            rows = session.execute(
-                select(m).order_by(m.computed_at.desc()).limit(limit)
-            ).scalars().all()
+        all_rows = session.execute(
+            select(m).order_by(m.computed_at.desc())
+        ).scalars().all()
+
+    if date_from or date_to:
+        filtered_rows = [
+            row for row in all_rows
+            if _row_in_date_range(row, date_from, date_to)
+        ]
+    else:
+        filtered_rows = all_rows
+
+    rows = filtered_rows[:limit]
+    total = len(filtered_rows)
+    first_values = [
+        row.first_response_minutes for row in filtered_rows
+        if row.first_response_minutes is not None
+    ]
+    total_values = [
+        row.total_response_minutes for row in filtered_rows
+        if row.total_response_minutes is not None
+    ]
+    avg_first = sum(first_values) / len(first_values) if first_values else None
+    avg_total = sum(total_values) / len(total_values) if total_values else None
+    last_sync = max((row.computed_at for row in filtered_rows if row.computed_at), default=None)
 
     return render_template(
         "dashboard.html",
@@ -139,8 +171,26 @@ def dashboard():
         export_url="/export/respostas.csv",
         target_forms=Config.TARGET_TICKET_FORM_IDS,
         country_field=Config.COUNTRY_CUSTOM_FIELD_ID,
-        selected_date=selected_date.isoformat() if selected_date else "",
+        date_from=date_from.isoformat() if date_from else "",
+        date_to=date_to.isoformat() if date_to else "",
+        filter_label=_date_range_label(date_from, date_to),
+        limit=limit,
     )
+
+
+@app.post("/requester-responses/<int:ticket_id>/delete")
+def delete_requester_response(ticket_id: int):
+    """Remove um ticket inválido da base local do dashboard/exportação."""
+    with SessionLocal() as session:
+        response_row = session.get(RequesterResponseLog, ticket_id)
+        pending_row = session.get(PendingTimeLog, ticket_id)
+        if response_row is not None:
+            session.delete(response_row)
+        if pending_row is not None:
+            session.delete(pending_row)
+        session.commit()
+    export_response_metrics_file()
+    return redirect(url_for("dashboard", **_dashboard_args_from_form(request.form)))
 
 
 @app.post("/zendesk/timer")
