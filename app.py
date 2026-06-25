@@ -1,6 +1,7 @@
 """API Flask para sincronizar métricas Zendesk, timers e exportação CSV."""
 import logging
 import os
+import threading
 import time
 from datetime import date, datetime
 
@@ -16,6 +17,8 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 init_db()
 _syncer = None
+_timer_loop_started = False
+_timer_loop_lock = threading.Lock()
 
 
 def get_syncer() -> MetricSyncer:
@@ -23,6 +26,49 @@ def get_syncer() -> MetricSyncer:
     if _syncer is None:
         _syncer = MetricSyncer()
     return _syncer
+
+
+def _zendesk_configured() -> bool:
+    return bool(Config.ZENDESK_SUBDOMAIN and Config.ZENDESK_EMAIL and Config.ZENDESK_API_TOKEN)
+
+
+def _run_pending_timer_scan() -> dict:
+    return get_syncer().sync_query(Config.PENDING_TIMER_SYNC_QUERY)
+
+
+def _pending_timer_loop() -> None:
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            result = _run_pending_timer_scan()
+            logger.info(
+                "Pending timer scan: processed=%s notes=%s errors=%s",
+                result.get("processed"),
+                result.get("timer_notes_sent"),
+                result.get("errors_count"),
+            )
+        except Exception:
+            logger.exception("Pending timer scan failed")
+        time.sleep(max(Config.PENDING_TIMER_LOOP_INTERVAL_SECONDS, 60))
+
+
+def start_pending_timer_loop() -> None:
+    global _timer_loop_started
+    if not Config.PENDING_TIMER_LOOP_ENABLED or not _zendesk_configured():
+        return
+    with _timer_loop_lock:
+        if _timer_loop_started:
+            return
+        thread = threading.Thread(
+            target=_pending_timer_loop,
+            name="ztimer-pending-timer-loop",
+            daemon=True,
+        )
+        thread.start()
+        _timer_loop_started = True
+
+
+start_pending_timer_loop()
 
 
 def _valid_webhook(req) -> bool:
@@ -241,6 +287,10 @@ def health():
         target_ticket_form_ids=Config.TARGET_TICKET_FORM_IDS,
         country_custom_field_id=Config.COUNTRY_CUSTOM_FIELD_ID,
         response_pending_tags=Config.RESPONSE_PENDING_TAGS,
+        pending_timer_loop_enabled=Config.PENDING_TIMER_LOOP_ENABLED,
+        pending_timer_loop_started=_timer_loop_started,
+        pending_timer_loop_interval_seconds=Config.PENDING_TIMER_LOOP_INTERVAL_SECONDS,
+        pending_timer_sync_query=Config.PENDING_TIMER_SYNC_QUERY,
     )
 
 
@@ -283,6 +333,16 @@ def sync_batch():
         export_path = get_syncer().export_response_metrics()
         return jsonify(processed=len(out), export_path=export_path, results=out)
     return jsonify(get_syncer().sync_query(body.get("query") or Config.DEFAULT_SYNC_QUERY))
+
+
+@app.post("/timer/scan")
+def timer_scan():
+    """Força a varredura dos tickets em pending para enviar notas internas vencidas."""
+    if not _valid_webhook(request):
+        return jsonify(error="unauthorized"), 401
+    body = request.get_json(silent=True) or {}
+    query = body.get("query") or Config.PENDING_TIMER_SYNC_QUERY
+    return jsonify(get_syncer().sync_query(query))
 
 
 @app.get("/requester-responses")
