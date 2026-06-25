@@ -74,6 +74,9 @@ RESPONSE_PENDING_TAGS=aguard_retorno_cliente
 
 DATABASE_URL=sqlite:///metrics.db
 DEFAULT_SYNC_QUERY=type:ticket
+PENDING_TIMER_LOOP_ENABLED=true
+PENDING_TIMER_LOOP_INTERVAL_SECONDS=300
+PENDING_TIMER_SYNC_QUERY=type:ticket status:pending
 
 EXPORT_DIR=exports
 RESPONSE_EXPORT_FILENAME=respostas_solicitantes.csv
@@ -110,6 +113,16 @@ O `/zendesk/timer` processa a entrada em `pending`. O `/zendesk/cancelar`
 processa a saída de `pending`, fecha o intervalo em `pending` e alimenta o
 dashboard. Quando o ticket não está mais em `pending`, os próximos avisos deixam
 de ser enviados automaticamente.
+
+Os avisos internos de 10/30/55/60 min dependem de uma varredura enquanto o
+ticket ainda está em `pending`. O serviço roda essa varredura automaticamente a
+cada 5 minutos usando `PENDING_TIMER_SYNC_QUERY`.
+
+Forçar varredura dos avisos:
+
+```bash
+curl -X POST localhost:5000/timer/scan
+```
 
 Processar uma lista:
 
