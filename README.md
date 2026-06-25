@@ -143,6 +143,15 @@ Filtro por dia:
 http://localhost:5000/dashboard?date=2026-06-22
 ```
 
+Filtro por período:
+
+```text
+http://localhost:5000/dashboard?date_from=2026-06-01&date_to=2026-06-25
+```
+
+No dashboard, o botão `Excluir` remove o ticket apenas da base local do ZTimer e
+do CSV exportado; ele não altera o ticket no Zendesk.
+
 Exportar para Excel/Power Query:
 
 ```text
