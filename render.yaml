@@ -24,6 +24,12 @@ services:
         value: "sqlite:///metrics.db"
       - key: DEFAULT_SYNC_QUERY
         value: "type:ticket"
+      - key: PENDING_TIMER_LOOP_ENABLED
+        value: "true"
+      - key: PENDING_TIMER_LOOP_INTERVAL_SECONDS
+        value: "300"
+      - key: PENDING_TIMER_SYNC_QUERY
+        value: "type:ticket status:pending"
       - key: EXPORT_DIR
         value: "exports"
       - key: RESPONSE_EXPORT_FILENAME
