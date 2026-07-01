@@ -83,9 +83,10 @@ RESPONSE_EXPORT_FILENAME=respostas_solicitantes.csv
 ```
 
 O campo `COUNTRY_CUSTOM_FIELD_ID` é uma lista suspensa do Zendesk; o CSV exporta
-o nome da opção quando a API retorna a lista de opções do campo. As métricas
-consideram apenas períodos em `pending` em que a tag `aguard_retorno_cliente`
-estava ativa.
+o nome da opção quando a API retorna a lista de opções do campo. Por padrão, as
+métricas contam todo o tempo em `pending`. Para contar apenas os períodos em que
+uma tag específica estava ativa, preencha `RESPONSE_PENDING_TAGS` (ex.:
+`aguard_retorno_cliente`).
 
 ## Uso
 
