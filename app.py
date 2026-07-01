@@ -192,6 +192,7 @@ _OPEN_ENDPOINTS = {
     "health",
     "export_requester_responses",
     "delete_requester_response",  # formulário do dashboard (sem header custom)
+    "delete_requester_responses_batch",
     "list_requester_responses",
     "list_metrics",
     "metrics_summary",
@@ -428,6 +429,7 @@ def dashboard():
         timer_interval_seconds=Config.PENDING_TIMER_LOOP_INTERVAL_SECONDS,
         scan_state=scan_state,
         deleted=request.args.get("deleted"),
+        deleted_count=request.args.get("deleted_count"),
     )
 
 
@@ -445,6 +447,33 @@ def delete_requester_response(ticket_id: int):
     export_response_metrics_file()
     args = _dashboard_args_from_form(request.form)
     args["deleted"] = ticket_id
+    return redirect(url_for("dashboard", **args))
+
+
+@app.post("/requester-responses/delete-batch")
+def delete_requester_responses_batch():
+    """Remove vários tickets de uma vez da base local (seleção no dashboard)."""
+    ids = []
+    for value in request.form.getlist("ticket_ids"):
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    deleted = 0
+    if ids:
+        with SessionLocal() as session:
+            for ticket_id in ids:
+                response_row = session.get(RequesterResponseLog, ticket_id)
+                pending_row = session.get(PendingTimeLog, ticket_id)
+                if response_row is not None:
+                    session.delete(response_row)
+                    deleted += 1
+                if pending_row is not None:
+                    session.delete(pending_row)
+            session.commit()
+        export_response_metrics_file()
+    args = _dashboard_args_from_form(request.form)
+    args["deleted_count"] = deleted
     return redirect(url_for("dashboard", **args))
 
 

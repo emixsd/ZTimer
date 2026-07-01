@@ -202,6 +202,15 @@
     .button.primary:hover { background: var(--brand-dark); }
     .button.ghost { min-height: 32px; padding: 5px 9px; font-size: 12px; }
     .button.danger { color: var(--red); }
+    .button:disabled { cursor: not-allowed; opacity: .45; }
+
+    .check-col { width: 34px; text-align: center; }
+    .check-col input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--brand);
+      cursor: pointer;
+    }
 
     .panel {
       overflow: hidden;
@@ -382,6 +391,12 @@
     </div>
     {% endif %}
 
+    {% if deleted_count %}
+    <div class="notice success" role="status">
+      <div><strong>{{ deleted_count }} ticket{{ '' if deleted_count == '1' else 's' }} removido{{ '' if deleted_count == '1' else 's' }}</strong><span>O painel e o CSV já foram atualizados.</span></div>
+    </div>
+    {% endif %}
+
     <section class="toolbar" aria-label="Filtros do painel">
       <form class="filter-form" action="/dashboard" method="get">
         <label class="field">
@@ -402,6 +417,12 @@
         </label>
         <button class="button" type="button" onclick="location.reload()">Atualizar</button>
         <a class="button" href="{{ export_url }}">Baixar CSV</a>
+        <form id="bulk-delete-form" method="post" action="/requester-responses/delete-batch">
+          <input type="hidden" name="date_from" value="{{ date_from }}">
+          <input type="hidden" name="date_to" value="{{ date_to }}">
+          <input type="hidden" name="limit" value="{{ limit }}">
+          <button class="button danger" id="bulk-delete-btn" type="submit" disabled>Excluir selecionados</button>
+        </form>
       </div>
     </section>
 
@@ -431,6 +452,7 @@
         <table id="tickets-table">
           <thead>
             <tr>
+              <th class="check-col"><input type="checkbox" id="check-all" aria-label="Selecionar todos os tickets visíveis"></th>
               <th>Ticket</th>
               <th>Solicitante</th>
               <th>País</th>
@@ -445,6 +467,7 @@
           <tbody>
             {% for row in rows %}
             <tr data-search="{{ row.ticket_id }} {{ row.requester_email or '' }} {{ row.country or '' }} {{ row.subject or '' }}">
+              <td class="check-col"><input type="checkbox" name="ticket_ids" value="{{ row.ticket_id }}" form="bulk-delete-form" aria-label="Selecionar ticket {{ row.ticket_id }}"></td>
               <td>
                 {% if zendesk_base_url %}
                   <a class="ticket-link" href="{{ zendesk_base_url }}/{{ row.ticket_id }}" target="_blank" rel="noopener">#{{ row.ticket_id }}</a>
@@ -553,6 +576,41 @@
         if (matches) visible += 1;
       });
       if (searchEmpty) searchEmpty.hidden = visible !== 0;
+    });
+
+    const bulkForm = document.getElementById("bulk-delete-form");
+    const bulkBtn = document.getElementById("bulk-delete-btn");
+    const checkAll = document.getElementById("check-all");
+    const ticketBoxes = () => Array.from(document.querySelectorAll('input[name="ticket_ids"]'));
+    const checkedCount = () => ticketBoxes().filter((box) => box.checked).length;
+
+    function refreshBulkButton() {
+      const count = checkedCount();
+      bulkBtn.disabled = count === 0;
+      bulkBtn.textContent = count ? `Excluir selecionados (${count})` : "Excluir selecionados";
+    }
+
+    if (checkAll) {
+      checkAll.addEventListener("change", () => {
+        ticketBoxes().forEach((box) => {
+          if (!box.closest("tr").hidden) box.checked = checkAll.checked;
+        });
+        refreshBulkButton();
+      });
+    }
+
+    document.addEventListener("change", (event) => {
+      if (event.target.name === "ticket_ids") {
+        if (!event.target.checked && checkAll) checkAll.checked = false;
+        refreshBulkButton();
+      }
+    });
+
+    bulkForm.addEventListener("submit", (event) => {
+      const count = checkedCount();
+      if (!count || !confirm(`Remover ${count} ticket${count === 1 ? "" : "s"} somente do ZTimer?`)) {
+        event.preventDefault();
+      }
     });
   </script>
 </body>
