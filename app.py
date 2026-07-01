@@ -1,4 +1,5 @@
 """API Flask para sincronizar métricas Zendesk, timers e exportação CSV."""
+import hmac
 import json
 import logging
 import os
@@ -11,14 +12,26 @@ from sqlalchemy import func, select
 
 from config import Config
 from models import PendingTimeLog, RequesterResponseLog, SessionLocal, init_db
+from report import (
+    last_report_date,
+    report_due_now,
+    run_daily_report,
+    smtp_configured,
+)
 from sync import MetricSyncer, export_response_metrics_file, response_metrics_csv_from_db
 
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 init_db()
+if not Config.WEBHOOK_SECRET:
+    logging.getLogger(__name__).warning(
+        "WEBHOOK_SECRET não configurado: endpoints de sync/webhook aceitam "
+        "requisições sem autenticação."
+    )
 _syncer = None
 _timer_loop_started = False
+_report_loop_started = False
 _timer_loop_lock = threading.Lock()
 _scan_run_lock = threading.Lock()
 _scan_state_lock = threading.Lock()
@@ -124,17 +137,75 @@ def start_pending_timer_loop() -> None:
         _timer_loop_started = True
 
 
+def _daily_report_loop() -> None:
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            if report_due_now():
+                result = run_daily_report()
+                logger.info("Relatório diário: %s", result)
+        except Exception:
+            logger.exception("Relatório diário falhou")
+        time.sleep(60)
+
+
+def start_daily_report_loop() -> None:
+    global _report_loop_started
+    if not Config.REPORT_EMAIL_ENABLED or not smtp_configured():
+        if Config.REPORT_EMAIL_ENABLED:
+            logging.getLogger(__name__).warning(
+                "REPORT_EMAIL_ENABLED=true mas SMTP_HOST/REPORT_EMAIL_TO "
+                "não configurados; relatório diário desativado."
+            )
+        return
+    with _timer_loop_lock:
+        if _report_loop_started:
+            return
+        thread = threading.Thread(
+            target=_daily_report_loop,
+            name="ztimer-daily-report-loop",
+            daemon=True,
+        )
+        thread.start()
+        _report_loop_started = True
+
+
 start_pending_timer_loop()
+start_daily_report_loop()
 
 
 def _valid_webhook(req) -> bool:
     if not Config.WEBHOOK_SECRET:
         return True
     secret = req.headers.get("X-Webhook-Secret", "")
-    if secret == Config.WEBHOOK_SECRET:
+    if secret and hmac.compare_digest(secret, Config.WEBHOOK_SECRET):
         return True
-    bearer = req.headers.get("Authorization", "").replace("Bearer ", "")
-    return bearer == Config.WEBHOOK_SECRET
+    bearer = req.headers.get("Authorization", "").removeprefix("Bearer ")
+    return bool(bearer) and hmac.compare_digest(bearer, Config.WEBHOOK_SECRET)
+
+
+# Endpoints acessíveis sem o secret: páginas/ações do dashboard e leituras locais.
+# Rotas novas ficam protegidas por padrão.
+_OPEN_ENDPOINTS = {
+    "static",
+    "dashboard",
+    "health",
+    "export_requester_responses",
+    "delete_requester_response",  # formulário do dashboard (sem header custom)
+    "list_requester_responses",
+    "list_metrics",
+    "metrics_summary",
+    "read_one",
+}
+
+
+@app.before_request
+def _require_webhook_secret():
+    if request.endpoint is None or request.endpoint in _OPEN_ENDPOINTS:
+        return None
+    if not _valid_webhook(request):
+        return jsonify(error="unauthorized"), 401
+    return None
 
 
 def _payload_ticket_id(body: dict):
@@ -428,9 +499,6 @@ def delete_requester_response(ticket_id: int):
 @app.post("/zendesk/timer")
 def zendesk_timer_webhook():
     """Compatibilidade com o trigger antigo: processa o ticket e alimenta o painel."""
-    if not _valid_webhook(request):
-        return jsonify(error="unauthorized"), 401
-
     body = request.get_json(silent=True) or {}
     ticket_id = _payload_ticket_id(body)
     if ticket_id is None:
@@ -451,9 +519,6 @@ def zendesk_cancel_webhook():
     Ao sair de pending, recalcula o ticket para fechar o intervalo de pending
     e alimentar o dashboard.
     """
-    if not _valid_webhook(request):
-        return jsonify(error="unauthorized"), 401
-
     body = request.get_json(silent=True) or {}
     ticket_id = _payload_ticket_id(body)
     if ticket_id is None:
@@ -481,6 +546,12 @@ def health():
         pending_timer_sync_query=Config.PENDING_TIMER_SYNC_QUERY,
         pending_sla_minutes=Config.PENDING_SLA_MINUTES,
         timer_scan=scan_state,
+        report_email_enabled=Config.REPORT_EMAIL_ENABLED,
+        report_loop_started=_report_loop_started,
+        report_send_hour=Config.REPORT_SEND_HOUR,
+        report_timezone=Config.REPORT_TIMEZONE,
+        retention_hours=Config.RETENTION_HOURS,
+        last_report_date=last_report_date() or None,
     )
 
 
@@ -528,11 +599,15 @@ def sync_batch():
 @app.post("/timer/scan")
 def timer_scan():
     """Força a varredura dos tickets em pending para enviar notas internas vencidas."""
-    if not _valid_webhook(request):
-        return jsonify(error="unauthorized"), 401
     body = request.get_json(silent=True) or {}
     query = body.get("query") or Config.PENDING_TIMER_SYNC_QUERY
     return jsonify(_run_pending_timer_scan(query))
+
+
+@app.post("/report/run")
+def report_run():
+    """Dispara manualmente o relatório por e-mail + limpeza de retenção."""
+    return jsonify(run_daily_report())
 
 
 @app.get("/requester-responses")

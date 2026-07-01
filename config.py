@@ -83,6 +83,24 @@ class Config:
         "RESPONSE_EXPORT_FILENAME", "respostas_solicitantes.csv"
     )
 
+    # --- Relatório diário por e-mail + retenção de dados ---
+    # Uma vez por dia (REPORT_SEND_HOUR no fuso REPORT_TIMEZONE), envia o CSV
+    # por e-mail e apaga registros resolvidos com mais de RETENTION_HOURS.
+    REPORT_EMAIL_ENABLED = _bool_env("REPORT_EMAIL_ENABLED", "false")
+    REPORT_EMAIL_TO = [
+        s.strip() for s in os.getenv("REPORT_EMAIL_TO", "").split(",") if s.strip()
+    ]
+    REPORT_SEND_HOUR = min(max(int(os.getenv("REPORT_SEND_HOUR", "18")), 0), 23)
+    REPORT_TIMEZONE = os.getenv("REPORT_TIMEZONE", "America/Sao_Paulo")
+    RETENTION_HOURS = max(int(os.getenv("RETENTION_HOURS", "24")), 1)
+
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    # Remetente exibido; vazio usa SMTP_USER.
+    SMTP_FROM = os.getenv("SMTP_FROM", "")
+
     # Tags de controle do timer em Pendente.
     PENDING_TIMER_ARMED_TAG = os.getenv("PENDING_TIMER_ARMED_TAG", "tmr_pendente_armado")
     PENDING_TIMER_ALERTS = [

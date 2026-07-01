@@ -37,5 +37,26 @@ services:
         value: "exports"
       - key: RESPONSE_EXPORT_FILENAME
         value: "respostas_solicitantes.csv"
+      # Relatório diário por e-mail + retenção de 24h.
+      - key: REPORT_EMAIL_ENABLED
+        value: "true"
+      - key: REPORT_EMAIL_TO
+        sync: false
+      - key: REPORT_SEND_HOUR
+        value: "18"
+      - key: REPORT_TIMEZONE
+        value: "America/Sao_Paulo"
+      - key: RETENTION_HOURS
+        value: "24"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
       - key: FLASK_DEBUG
         value: "false"

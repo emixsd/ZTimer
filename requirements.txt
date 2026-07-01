@@ -3,5 +3,7 @@ requests>=2.31
 SQLAlchemy>=2.0
 python-dotenv>=1.0
 gunicorn>=21.2
+# Fusos horários do relatório diário (necessário no Windows; inócuo no Linux).
+tzdata>=2024.1
 # Postgres (produção). Descomente se for usar:
 # psycopg2-binary>=2.9
