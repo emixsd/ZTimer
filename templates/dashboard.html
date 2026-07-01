@@ -203,68 +203,6 @@
     .button.ghost { min-height: 32px; padding: 5px 9px; font-size: 12px; }
     .button.danger { color: var(--red); }
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat {
-      position: relative;
-      min-height: 126px;
-      overflow: hidden;
-      padding: 17px 18px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .stat::after {
-      position: absolute;
-      right: -20px;
-      bottom: -32px;
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      background: var(--green-soft);
-      content: "";
-      opacity: .7;
-    }
-
-    .stat.attention::after { background: var(--red-soft); }
-    .stat.sla::after { background: var(--blue-soft); }
-    .stat.average::after { background: var(--amber-soft); }
-
-    .stat-label {
-      position: relative;
-      z-index: 1;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 750;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-    }
-
-    .stat-value {
-      position: relative;
-      z-index: 1;
-      margin-top: 9px;
-      font-size: 32px;
-      font-weight: 820;
-      letter-spacing: -.04em;
-      line-height: 1;
-    }
-
-    .stat-note {
-      position: relative;
-      z-index: 1;
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
     .panel {
       overflow: hidden;
       border: 1px solid var(--line);
@@ -385,7 +323,6 @@
       .toolbar { align-items: stretch; flex-direction: column; }
       .toolbar-actions { justify-content: space-between; }
       .search { width: min(420px, 60vw); }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 620px) {
@@ -396,8 +333,6 @@
       .filter-form, .toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .field, .search { width: 100%; }
       .field.search-field { grid-column: 1 / -1; }
-      .stats { grid-template-columns: 1fr; }
-      .stat { min-height: 112px; }
       .panel-head { align-items: flex-start; flex-direction: column; }
       .scan-meta { text-align: left; }
     }
@@ -468,29 +403,6 @@
         <button class="button" type="button" onclick="location.reload()">Atualizar</button>
         <a class="button" href="{{ export_url }}">Baixar CSV</a>
       </div>
-    </section>
-
-    <section class="stats" aria-label="Resumo da operação">
-      <article class="stat">
-        <div class="stat-label">Em pending agora</div>
-        <div class="stat-value">{{ active_count }}</div>
-        <div class="stat-note">{{ total }} ticket{{ '' if total == 1 else 's' }} no período · SLA de {{ sla_minutes }} min</div>
-      </article>
-      <article class="stat attention">
-        <div class="stat-label">Pedem atenção</div>
-        <div class="stat-value">{{ at_risk_count + breached_count }}</div>
-        <div class="stat-note">{{ at_risk_count }} próximo{{ '' if at_risk_count == 1 else 's' }} do limite · {{ breached_count }} excedido{{ '' if breached_count == 1 else 's' }}</div>
-      </article>
-      <article class="stat sla">
-        <div class="stat-label">Dentro do SLA</div>
-        <div class="stat-value">{{ (sla_compliance|string + '%') if sla_compliance is not none else '—' }}</div>
-        <div class="stat-note">considera a primeira saída de pending</div>
-      </article>
-      <article class="stat average">
-        <div class="stat-label">Média de resposta</div>
-        <div class="stat-value">{{ "%.1f min"|format(avg_first) if avg_first is not none else "—" }}</div>
-        <div class="stat-note">tempo médio até a primeira resposta</div>
-      </article>
     </section>
 
     <section class="panel">

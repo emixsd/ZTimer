@@ -405,60 +405,12 @@ def dashboard():
         reverse=True,
     )
     rows = filtered_rows[:limit]
-    total = len(filtered_rows)
-    first_values = [
-        row.first_response_minutes for row in filtered_rows
-        if row.first_response_minutes is not None
-    ]
-    total_values = [
-        row.total_response_minutes for row in filtered_rows
-        if row.total_response_minutes is not None
-    ]
-    avg_first = sum(first_values) / len(first_values) if first_values else None
-    avg_total = sum(total_values) / len(total_values) if total_values else None
-    last_sync = max((row.computed_at for row in filtered_rows if row.computed_at), default=None)
     dashboard_rows = [_dashboard_row(row) for row in rows]
-    active_elapsed = [
-        value
-        for value in (_live_alert_minutes(row) for row in filtered_rows)
-        if value is not None
-    ]
-    active_count = len(active_elapsed)
-    breached_count = sum(
-        value >= Config.PENDING_SLA_MINUTES for value in active_elapsed
-    )
-    at_risk_count = sum(
-        max(Config.PENDING_SLA_MINUTES - 5, 0)
-        <= value
-        < Config.PENDING_SLA_MINUTES
-        for value in active_elapsed
-    )
-    completed_with_sla = [
-        value for value in first_values if value is not None
-    ]
-    sla_compliance = (
-        round(
-            sum(value <= Config.PENDING_SLA_MINUTES for value in completed_with_sla)
-            / len(completed_with_sla)
-            * 100
-        )
-        if completed_with_sla
-        else None
-    )
     scan_state = _scan_state_snapshot()
 
     return render_template(
         "dashboard.html",
         rows=dashboard_rows,
-        total=total or 0,
-        active_count=active_count,
-        at_risk_count=at_risk_count,
-        breached_count=breached_count,
-        sla_compliance=sla_compliance,
-        sla_minutes=Config.PENDING_SLA_MINUTES,
-        avg_first=round(avg_first, 1) if avg_first is not None else None,
-        avg_total=round(avg_total, 1) if avg_total is not None else None,
-        last_sync=last_sync.isoformat() if last_sync else None,
         export_url="/export/respostas.csv",
         target_forms=Config.TARGET_TICKET_FORM_IDS,
         country_field=Config.COUNTRY_CUSTOM_FIELD_ID,
