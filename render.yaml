@@ -29,8 +29,10 @@ services:
         value: "true"
       - key: PENDING_TIMER_LOOP_INTERVAL_SECONDS
         value: "300"
+      # Sem status:pending de propósito: cobre a saída de pending pela tag
+      # de armado quando o webhook Cancelar falha.
       - key: PENDING_TIMER_SYNC_QUERY
-        value: "type:ticket status:pending tags:tmr_pendente_armado"
+        value: "type:ticket tags:tmr_pendente_armado"
       - key: PENDING_SLA_MINUTES
         value: "60"
       - key: EXPORT_DIR

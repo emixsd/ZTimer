@@ -69,11 +69,14 @@ class Config:
     PENDING_TIMER_LOOP_INTERVAL_SECONDS = int(
         os.getenv("PENDING_TIMER_LOOP_INTERVAL_SECONDS", "300")
     )
-    # Estreitado com a tag de armado pra varrer só os tickets do fluxo alvo
-    # (e não todos os pendentes do Zendesk), mantendo a varredura rápida.
+    # Filtra pela tag de armado pra varrer só os tickets do fluxo alvo,
+    # mantendo a varredura rápida. Sem filtro de status de propósito: ticket
+    # que saiu de pending ainda carrega a tag até o app processar a saída
+    # (fechar o intervalo e desarmar), então a varredura cobre a saída mesmo
+    # se o webhook Cancelar falhar — e o ticket some da busca em seguida.
     PENDING_TIMER_SYNC_QUERY = os.getenv(
         "PENDING_TIMER_SYNC_QUERY",
-        "type:ticket status:pending tags:tmr_pendente_armado",
+        "type:ticket tags:tmr_pendente_armado",
     )
     PENDING_SLA_MINUTES = max(int(os.getenv("PENDING_SLA_MINUTES", "60")), 1)
 
