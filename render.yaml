@@ -30,7 +30,7 @@ services:
       - key: PENDING_TIMER_LOOP_INTERVAL_SECONDS
         value: "300"
       - key: PENDING_TIMER_SYNC_QUERY
-        value: "type:ticket status:pending"
+        value: "type:ticket status:pending tags:tmr_pendente_armado"
       - key: PENDING_SLA_MINUTES
         value: "60"
       - key: EXPORT_DIR

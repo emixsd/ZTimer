@@ -75,7 +75,7 @@ DATABASE_URL=sqlite:///metrics.db
 DEFAULT_SYNC_QUERY=type:ticket
 PENDING_TIMER_LOOP_ENABLED=true
 PENDING_TIMER_LOOP_INTERVAL_SECONDS=300
-PENDING_TIMER_SYNC_QUERY=type:ticket status:pending
+PENDING_TIMER_SYNC_QUERY=type:ticket status:pending tags:tmr_pendente_armado
 PENDING_SLA_MINUTES=60
 
 EXPORT_DIR=exports

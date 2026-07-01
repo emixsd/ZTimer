@@ -69,8 +69,11 @@ class Config:
     PENDING_TIMER_LOOP_INTERVAL_SECONDS = int(
         os.getenv("PENDING_TIMER_LOOP_INTERVAL_SECONDS", "300")
     )
+    # Estreitado com a tag de armado pra varrer só os tickets do fluxo alvo
+    # (e não todos os pendentes do Zendesk), mantendo a varredura rápida.
     PENDING_TIMER_SYNC_QUERY = os.getenv(
-        "PENDING_TIMER_SYNC_QUERY", "type:ticket status:pending"
+        "PENDING_TIMER_SYNC_QUERY",
+        "type:ticket status:pending tags:tmr_pendente_armado",
     )
     PENDING_SLA_MINUTES = max(int(os.getenv("PENDING_SLA_MINUTES", "60")), 1)
 
