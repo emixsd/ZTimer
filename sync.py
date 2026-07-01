@@ -7,8 +7,8 @@ Novo fluxo principal:
   - enquanto o ticket segue em pending, adiciona observacoes internas por timer.
 """
 import csv
+import json
 import logging
-from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -20,6 +20,7 @@ from metrics import (
     PendingIntervalResult,
     RequesterResponseResult,
     compute_first_pending_interval,
+    compute_pending_reason_breakdown,
     compute_pending_response_times,
     current_pending_started_at,
     resolve_custom_status_ids,
@@ -152,6 +153,8 @@ class MetricSyncer:
         result: RequesterResponseResult,
         requester_email: Optional[str],
         country: Optional[str],
+        reason_minutes: Optional[Dict[str, float]] = None,
+        alert_clock_running: bool = False,
     ) -> RequesterResponseLog:
         with SessionLocal() as session:
             row = session.get(RequesterResponseLog, result.ticket_id) or RequesterResponseLog(
@@ -168,6 +171,10 @@ class MetricSyncer:
             row.last_response_at = result.last_exited_at
             row.current_pending_at = result.current_pending_at
             row.current_pending_elapsed_minutes = result.current_pending_elapsed_minutes
+            row.pending_reason_minutes = json.dumps(
+                reason_minutes or {}, ensure_ascii=False
+            )
+            row.alert_clock_running = alert_clock_running
             row.ticket_form_id = self._ticket_form_id(ticket)
             row.ticket_status = ticket.get("status")
             row.subject = (ticket.get("subject") or "")[:500]
@@ -223,17 +230,13 @@ class MetricSyncer:
             current_status=ticket.get("status"),
             ticket_created_at=ticket.get("created_at"),
         )
-        if pending_since is None:
-            return {
-                "status": "pending_since_unknown",
-                "notes_sent": [],
-                "tags_added": [],
-                "tags_removed": [],
-                "alerts_sent": [],
-                "next_alert_minutes": alerts[0]["minutes"] if alerts else None,
-            }
 
-        elapsed = round((datetime.now(timezone.utc) - pending_since).total_seconds() / 60, 2)
+        # Relógio do aviso = tempo ACUMULADO na tag de alerta (sla60m). Só esse
+        # tempo conta para os marcos 10/30/55/60; outros tipos não disparam.
+        reason_minutes = compute_pending_reason_breakdown(
+            audits, Config.PENDING_REASON_TAGS
+        )
+        elapsed = round(reason_minutes.get(Config.PENDING_ALERT_REASON_TAG, 0.0), 2)
         updated_stamp = ticket.get("updated_at")
         tags_added: list[str] = []
         notes_sent: list[int] = []
@@ -286,7 +289,7 @@ class MetricSyncer:
 
         return {
             "status": "pending",
-            "pending_since": pending_since.isoformat(),
+            "pending_since": pending_since.isoformat() if pending_since else None,
             "elapsed_minutes": elapsed,
             "notes_sent": notes_sent,
             "tags_added": tags_added,
@@ -318,9 +321,23 @@ class MetricSyncer:
             ticket_id,
             pending_tags=Config.RESPONSE_PENDING_TAGS,
         )
+        reason_minutes = compute_pending_reason_breakdown(
+            audits, Config.PENDING_REASON_TAGS
+        )
+        alert_clock_running = (
+            ticket.get("status") == "pending"
+            and Config.PENDING_ALERT_REASON_TAG in set(ticket.get("tags") or [])
+        )
         requester_email = self._requester_email(ticket)
         country = self._country_label(ticket)
-        row = self.upsert_response(ticket, response_result, requester_email, country)
+        row = self.upsert_response(
+            ticket,
+            response_result,
+            requester_email,
+            country,
+            reason_minutes=reason_minutes,
+            alert_clock_running=alert_clock_running,
+        )
         timer = self.process_pending_timers(ticket, audits)
         row = self.update_timer_state(ticket_id, timer)
 

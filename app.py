@@ -1,4 +1,5 @@
 """API Flask para sincronizar métricas Zendesk, timers e exportação CSV."""
+import json
 import logging
 import os
 import threading
@@ -205,10 +206,35 @@ def _live_pending_minutes(row: RequesterResponseLog):
     )
 
 
+def _row_alert_elapsed(row: RequesterResponseLog) -> float:
+    """Minutos acumulados na tag de alerta (sla60m), do último cálculo."""
+    if not row.pending_reason_minutes:
+        return 0.0
+    try:
+        data = json.loads(row.pending_reason_minutes)
+    except (ValueError, TypeError):
+        return 0.0
+    return float(data.get(Config.PENDING_ALERT_REASON_TAG, 0.0) or 0.0)
+
+
+def _live_alert_minutes(row: RequesterResponseLog):
+    """Relógio do SLA ao vivo = tempo em sla60m (só corre quando é o tipo ativo)."""
+    if row.ticket_status != "pending":
+        return None
+    elapsed = _row_alert_elapsed(row)
+    if row.alert_clock_running and row.computed_at is not None:
+        elapsed += max(
+            (datetime.now(timezone.utc) - _aware_utc(row.computed_at)).total_seconds() / 60,
+            0.0,
+        )
+    return round(elapsed, 1)
+
+
 def _dashboard_row(row: RequesterResponseLog) -> dict:
     data = row.to_dict()
-    elapsed = _live_pending_minutes(row)
-    data["live_pending_minutes"] = elapsed
+    elapsed = _live_alert_minutes(row)
+    data["live_alert_minutes"] = elapsed
+    data["live_pending_minutes"] = _live_pending_minutes(row)
     data["sla_percent"] = (
         min(round((elapsed / Config.PENDING_SLA_MINUTES) * 100), 100)
         if elapsed is not None and Config.PENDING_SLA_MINUTES > 0
@@ -302,7 +328,7 @@ def dashboard():
     filtered_rows.sort(
         key=lambda row: (
             row.ticket_status == "pending",
-            _live_pending_minutes(row) or -1,
+            _live_alert_minutes(row) or -1,
             _aware_utc(row.computed_at).timestamp() if row.computed_at else 0,
         ),
         reverse=True,
@@ -323,7 +349,7 @@ def dashboard():
     dashboard_rows = [_dashboard_row(row) for row in rows]
     active_elapsed = [
         value
-        for value in (_live_pending_minutes(row) for row in filtered_rows)
+        for value in (_live_alert_minutes(row) for row in filtered_rows)
         if value is not None
     ]
     active_count = len(active_elapsed)

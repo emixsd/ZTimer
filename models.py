@@ -4,6 +4,7 @@ Uma linha por ticket, registrando o que foi calculado e se o valor foi
 escrito de volta no campo do Zendesk. O dashboard "oficial" é o Explore
 (lendo o campo do ticket); esta tabela serve para auditoria/idempotência.
 """
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Float,
     Integer,
     String,
+    Text,
     create_engine,
     inspect,
     text,
@@ -84,6 +86,10 @@ class RequesterResponseLog(Base):
     current_pending_elapsed_minutes: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )
+    # JSON {tag_de_tipo: minutos} — tempo em pending por tipo de pendência.
+    pending_reason_minutes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # A tag de alerta (sla60m) é o tipo ativo agora? (relógio do aviso correndo)
+    alert_clock_running: Mapped[bool] = mapped_column(Boolean, default=False)
 
     ticket_form_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     ticket_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -96,6 +102,28 @@ class RequesterResponseLog(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     def to_dict(self) -> Dict[str, Any]:
+        reason_minutes: Dict[str, Any] = {}
+        if self.pending_reason_minutes:
+            try:
+                reason_minutes = json.loads(self.pending_reason_minutes)
+            except (ValueError, TypeError):
+                reason_minutes = {}
+        reason_list = [
+            {
+                "tag": tag,
+                "label": Config.PENDING_REASON_LABELS.get(tag, tag),
+                "minutes": round(float(reason_minutes.get(tag, 0.0) or 0.0), 1),
+            }
+            for tag in Config.PENDING_REASON_TAGS
+        ]
+        alert_elapsed = float(
+            reason_minutes.get(Config.PENDING_ALERT_REASON_TAG, 0.0) or 0.0
+        )
+        total_geral = round(
+            (self.total_response_minutes or 0.0)
+            + (self.current_pending_elapsed_minutes or 0.0),
+            2,
+        )
         return {
             "ticket_id": self.ticket_id,
             "requester_id": self.requester_id,
@@ -131,6 +159,10 @@ class RequesterResponseLog(Base):
             "timer_last_checked_at": self.timer_last_checked_at.isoformat()
             if self.timer_last_checked_at
             else None,
+            "pending_reason_minutes": reason_list,
+            "alert_elapsed_minutes": round(alert_elapsed, 2),
+            "alert_clock_running": bool(self.alert_clock_running),
+            "total_geral_minutes": total_geral,
             "computed_at": self.computed_at.isoformat() if self.computed_at else None,
         }
 
@@ -170,6 +202,8 @@ def _add_missing_columns() -> None:
         "timer_alerts_sent": "String",
         "timer_next_alert_minutes": "Integer",
         "timer_last_checked_at": "DateTime",
+        "pending_reason_minutes": "Text",
+        "alert_clock_running": "Boolean",
     }
     missing = {name: kind for name, kind in needed.items() if name not in existing}
     if not missing:
@@ -181,12 +215,16 @@ def _add_missing_columns() -> None:
             "Float": "FLOAT",
             "String": "VARCHAR(100)",
             "Integer": "INTEGER",
+            "Text": "TEXT",
+            "Boolean": "BOOLEAN",
         },
         "postgresql": {
             "DateTime": "TIMESTAMP WITH TIME ZONE",
             "Float": "DOUBLE PRECISION",
             "String": "VARCHAR(100)",
             "Integer": "INTEGER",
+            "Text": "TEXT",
+            "Boolean": "BOOLEAN",
         },
     }
     dialect_types = type_map.get(engine.dialect.name, type_map["sqlite"])

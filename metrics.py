@@ -272,6 +272,72 @@ def compute_pending_response_times(
 compute_pending_to_open_response_times = compute_pending_response_times
 
 
+def _tag_set(raw: Any) -> set:
+    """Normaliza o valor de um evento de tags em um conjunto de strings."""
+    if raw is None:
+        return set()
+    if isinstance(raw, (list, tuple, set)):
+        return {str(v) for v in raw}
+    return set(str(raw).replace(",", " ").split())
+
+
+def compute_pending_reason_breakdown(
+    audits: List[dict],
+    reason_tags: List[str],
+    now: Optional[datetime] = None,
+) -> Dict[str, float]:
+    """Soma o tempo em pending atribuido a cada tag de tipo de pendencia.
+
+    Cada trecho em pending e creditado a tag de tipo que estava ativa naquele
+    momento (lista suspensa = uma tag por vez). Trocar de tipo no meio do
+    pending divide o tempo entre os baldes; trechos da mesma tag se somam,
+    mesmo separados. Tempo em pending sem nenhuma dessas tags nao e creditado.
+    """
+    now = now or datetime.now(timezone.utc)
+    reason_tags = list(reason_tags)
+    totals: Dict[str, float] = {tag: 0.0 for tag in reason_tags}
+    reason_lookup = set(reason_tags)
+
+    current_status: Optional[str] = None
+    current_reason: Optional[str] = None
+    segment_start: Optional[datetime] = None
+
+    def credit(end: datetime) -> None:
+        if (
+            segment_start is not None
+            and current_status == "pending"
+            and current_reason in totals
+        ):
+            minutes = (end - segment_start).total_seconds() / 60
+            if minutes > 0:
+                totals[current_reason] += minutes
+
+    for audit in _sorted_audits(audits):
+        audit_time = _parse_ts(audit["created_at"])
+        next_status = current_status
+        next_reason = current_reason
+
+        for ev in audit.get("events", []):
+            field_name = ev.get("field_name")
+            if field_name == "status":
+                value = ev.get("value")
+                if value is not None:
+                    next_status = str(value)
+            elif field_name == "tags":
+                # value traz o conjunto completo de tags apos a mudanca.
+                present = _tag_set(ev.get("value")) & reason_lookup
+                next_reason = next(iter(present)) if present else None
+
+        if next_status != current_status or next_reason != current_reason:
+            credit(audit_time)
+            current_status = next_status
+            current_reason = next_reason
+            segment_start = audit_time
+
+    credit(now)
+    return {tag: round(minutes, 2) for tag, minutes in totals.items()}
+
+
 def current_pending_started_at(
     audits: List[dict],
     current_status: Optional[str],

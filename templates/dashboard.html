@@ -522,9 +522,9 @@
               <th>Ticket</th>
               <th>Solicitante</th>
               <th>País</th>
-              <th>Timer atual</th>
+              <th>Timer SLA (sla60m)</th>
               <th>1ª resposta</th>
-              <th>Total pending</th>
+              <th>Total pending / por tipo</th>
               <th>Status</th>
               <th>Atualizado</th>
               <th>Ações</th>
@@ -546,17 +546,19 @@
               </td>
               <td>{{ row.country or "—" }}</td>
               <td>
-                {% if row.live_pending_minutes is not none %}
+                {% if row.live_alert_minutes is not none %}
                 <div class="timer {{ row.sla_state }}">
                   <div class="timer-top">
-                    <span class="timer-value">{{ "%.1f min"|format(row.live_pending_minutes) }}</span>
+                    <span class="timer-value">{{ "%.1f min"|format(row.live_alert_minutes) }}</span>
                     <span class="badge {{ row.sla_state }}">{{ row.sla_label }}</span>
                   </div>
                   <div class="progress" aria-label="{{ row.sla_percent }}% do SLA consumido">
                     <span style="width: {{ row.sla_percent }}%"></span>
                   </div>
                   <div class="timer-note">
-                    {% if row.timer_next_alert_minutes %}
+                    {% if not row.alert_clock_running %}
+                      ⏸ Pausado (tipo atual não é SLA 60m)
+                    {% elif row.timer_next_alert_minutes %}
                       Próximo aviso: {{ row.timer_next_alert_minutes }} min
                     {% else %}
                       Todos os marcos processados
@@ -573,7 +575,16 @@
                 {% endif %}
               </td>
               <td class="number">{{ "%.1f min"|format(row.first_response_minutes) if row.first_response_minutes is not none else "—" }}</td>
-              <td class="number">{{ "%.1f min"|format(row.total_response_minutes) if row.total_response_minutes is not none else "—" }}</td>
+              <td class="number">
+                {% if row.total_geral_minutes %}{{ "%.1f min"|format(row.total_geral_minutes) }}{% else %}—{% endif %}
+                {% if row.pending_reason_minutes %}
+                <div style="margin-top:6px; text-align:left; font-size:11px; line-height:1.6; font-weight:600; color:#667085;">
+                  {% for item in row.pending_reason_minutes %}
+                  <div style="display:flex; justify-content:space-between; gap:8px;"><span>{{ item.label }}</span><b>{{ "%.1f"|format(item.minutes) }}m</b></div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </td>
               <td><span class="badge {{ 'pending' if row.ticket_status == 'pending' else '' }}">{{ row.ticket_status or "—" }}</span></td>
               <td class="number"><time datetime="{{ row.computed_at }}">{{ row.computed_at or "—" }}</time></td>
               <td>

@@ -38,18 +38,21 @@ class FakeZendeskClient:
         return {"tags": tags, "updated_at": "2026-06-01T12:00:01Z"}
 
 
-def pending_audits(minutes_ago):
+def pending_audits(minutes_ago, reason_tag="organização_sla60m"):
     started_at = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    events = [
+        {
+            "field_name": "status",
+            "previous_value": "open",
+            "value": "pending",
+        }
+    ]
+    if reason_tag:
+        events.insert(0, {"field_name": "tags", "value": [reason_tag]})
     return [
         {
             "created_at": started_at.isoformat().replace("+00:00", "Z"),
-            "events": [
-                {
-                    "field_name": "status",
-                    "previous_value": "open",
-                    "value": "pending",
-                }
-            ],
+            "events": events,
         }
     ]
 
@@ -117,6 +120,22 @@ class PendingTimerTest(unittest.TestCase):
             Config.PENDING_TIMER_ARMED_TAG,
             self.client.tag_updates[0]["tags"],
         )
+
+    def test_no_notice_when_type_is_not_sla60m(self):
+        # 65 min em pending, mas com um tipo que não dispara avisos.
+        ticket = {
+            "id": 404,
+            "status": "pending",
+            "tags": ["organização_outrodia/hora"],
+            "updated_at": "2026-06-01T12:00:00Z",
+        }
+
+        result = self.syncer.process_pending_timers(
+            ticket, pending_audits(65, reason_tag="organização_outrodia/hora")
+        )
+
+        self.assertEqual(result["notes_sent"], [])
+        self.assertEqual(len(self.client.comments), 0)
 
 
 if __name__ == "__main__":

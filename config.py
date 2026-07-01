@@ -127,3 +127,25 @@ class Config:
             ),
         },
     ]
+
+    # Tipos de pendência (campo lista suspensa "Selecione a pendência").
+    # Cada opção vira uma tag no ticket. O ZTimer mede o tempo em pending
+    # separado por tag; só a tag de alerta dispara os avisos internos, e o
+    # relógio do SLA conta apenas o tempo acumulado nessa tag.
+    PENDING_REASON_TAGS = [
+        s.strip()
+        for s in os.getenv(
+            "PENDING_REASON_TAGS",
+            "organização_sla60m,organização_outrodia/hora,documento-prestador",
+        ).split(",")
+        if s.strip()
+    ]
+    PENDING_ALERT_REASON_TAG = os.getenv(
+        "PENDING_ALERT_REASON_TAG", "organização_sla60m"
+    )
+    # Rótulos amigáveis por tag (dashboard). Sem entrada aqui, mostra a tag.
+    PENDING_REASON_LABELS = {
+        "organização_sla60m": "Organização (SLA 60m)",
+        "organização_outrodia/hora": "Organização (outro dia/hora)",
+        "documento-prestador": "Documento (prestador)",
+    }
