@@ -119,11 +119,15 @@ Os avisos internos de 10/30/55/60 min dependem de uma varredura enquanto o
 ticket ainda está em `pending`. O serviço roda essa varredura automaticamente a
 cada 5 minutos usando `PENDING_TIMER_SYNC_QUERY`.
 
-Ao sair de `pending`, as tags internas do timer são removidas. Assim, se o mesmo
-ticket voltar a `pending`, um novo ciclo de avisos começa normalmente. Se uma
-varredura encontrar vários marcos vencidos de uma vez, o ZTimer registra todos
-eles, mas envia somente a observação mais urgente para evitar uma sequência de
-notas repetidas.
+Ao sair de `pending`, apenas a tag de armado (`tmr_pendente_armado`) é removida
+— e por isso o gatilho de desarme no Zendesk não deve mexer em tags, só
+notificar o webhook. As tags de aviso (`nota_pendente_*_ok`) ficam no ticket
+como registro do que já foi notificado: o relógio do SLA soma o tempo de todos
+os períodos na pendência de alerta, então se o ticket voltar a `pending` os
+marcos já avisados não repetem a nota e o próximo aviso é o primeiro marco que o
+tempo acumulado ainda não atingiu. Se uma varredura encontrar vários marcos
+vencidos de uma vez, o ZTimer registra todos eles, mas envia somente a
+observação mais urgente para evitar uma sequência de notas repetidas.
 
 Forçar varredura dos avisos:
 

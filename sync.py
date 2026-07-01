@@ -204,13 +204,17 @@ class MetricSyncer:
         ticket_id = int(ticket["id"])
         tags = set(ticket.get("tags") or [])
         alerts = sorted(Config.PENDING_TIMER_ALERTS, key=lambda item: item["minutes"])
-        control_tags = {Config.PENDING_TIMER_ARMED_TAG}
-        control_tags.update(str(alert["tag"]) for alert in alerts)
 
         if ticket.get("status") != "pending":
-            tags_removed = sorted(tags & control_tags)
-            if tags_removed:
-                tags.difference_update(control_tags)
+            # Na saída remove só a tag de armado. As tags de aviso ficam como
+            # registro do que já foi notificado: o relógio do SLA é
+            # acumulativo, então se o ticket voltar a pending os marcos já
+            # avisados não repetem a nota — o próximo aviso é o primeiro marco
+            # que o tempo somado ainda não atingiu.
+            tags_removed = []
+            if Config.PENDING_TIMER_ARMED_TAG in tags:
+                tags.discard(Config.PENDING_TIMER_ARMED_TAG)
+                tags_removed = [Config.PENDING_TIMER_ARMED_TAG]
                 self.client.update_ticket_tags(
                     ticket_id,
                     list(tags),
@@ -221,7 +225,11 @@ class MetricSyncer:
                 "notes_sent": [],
                 "tags_added": [],
                 "tags_removed": tags_removed,
-                "alerts_sent": [],
+                "alerts_sent": [
+                    int(alert["minutes"])
+                    for alert in alerts
+                    if str(alert["tag"]) in tags
+                ],
                 "next_alert_minutes": None,
             }
 

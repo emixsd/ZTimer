@@ -82,25 +82,49 @@ class PendingTimerTest(unittest.TestCase):
         self.assertTrue(expected_control_tags <= self.client.comments[0]["tags"])
         self.assertIn("SLA excedido", self.client.comments[0]["body"])
 
-    def test_leaving_pending_removes_all_timer_control_tags(self):
-        control_tags = [
-            Config.PENDING_TIMER_ARMED_TAG,
-            *(alert["tag"] for alert in Config.PENDING_TIMER_ALERTS),
-        ]
+    def test_leaving_pending_removes_only_armed_tag(self):
+        # As tags de aviso ficam: o relógio é acumulativo, então elas são o
+        # registro do que já foi notificado e evitam nota repetida na volta.
+        alert_tags = [alert["tag"] for alert in Config.PENDING_TIMER_ALERTS]
         ticket = {
             "id": 202,
             "status": "open",
-            "tags": ["important", *control_tags],
+            "tags": ["important", Config.PENDING_TIMER_ARMED_TAG, *alert_tags],
             "updated_at": "2026-06-01T12:00:00Z",
         }
 
         result = self.syncer.process_pending_timers(ticket, [])
 
         self.assertEqual(result["status"], "disarmed")
-        self.assertEqual(result["alerts_sent"], [])
+        self.assertEqual(result["alerts_sent"], [10, 30, 55, 60])
         self.assertEqual(len(self.client.tag_updates), 1)
-        self.assertEqual(self.client.tag_updates[0]["tags"], {"important"})
-        self.assertEqual(set(result["tags_removed"]), set(control_tags))
+        self.assertEqual(
+            self.client.tag_updates[0]["tags"],
+            {"important", *alert_tags},
+        )
+        self.assertEqual(result["tags_removed"], [Config.PENDING_TIMER_ARMED_TAG])
+
+    def test_reentry_does_not_repeat_already_notified_milestones(self):
+        # Saiu de pending com 35 min somados e voltou: as notas de 10 e 30 já
+        # foram; nada repete e o próximo marco é o de 55.
+        ticket = {
+            "id": 505,
+            "status": "pending",
+            "tags": [
+                "organização_sla60m",
+                "nota_pendente_10m_ok",
+                "nota_pendente_30m_ok",
+            ],
+            "updated_at": "2026-06-01T12:00:00Z",
+        }
+
+        result = self.syncer.process_pending_timers(ticket, pending_audits(35))
+
+        self.assertEqual(result["notes_sent"], [])
+        self.assertEqual(len(self.client.comments), 0)
+        self.assertEqual(result["alerts_sent"], [10, 30])
+        self.assertEqual(result["next_alert_minutes"], 55)
+        self.assertEqual(result["tags_added"], [Config.PENDING_TIMER_ARMED_TAG])
 
     def test_first_scan_arms_timer_without_comment_before_ten_minutes(self):
         ticket = {
