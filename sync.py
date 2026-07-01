@@ -166,6 +166,8 @@ class MetricSyncer:
             row.first_pending_at = result.first_pending_at
             row.first_opened_at = result.first_exited_at
             row.last_response_at = result.last_exited_at
+            row.current_pending_at = result.current_pending_at
+            row.current_pending_elapsed_minutes = result.current_pending_elapsed_minutes
             row.ticket_form_id = self._ticket_form_id(ticket)
             row.ticket_status = ticket.get("status")
             row.subject = (ticket.get("subject") or "")[:500]
@@ -175,11 +177,46 @@ class MetricSyncer:
             session.refresh(row)
             return row
 
+    def update_timer_state(self, ticket_id: int, timer: dict) -> RequesterResponseLog:
+        with SessionLocal() as session:
+            row = session.get(RequesterResponseLog, ticket_id)
+            if row is None:
+                raise RuntimeError(f"Ticket {ticket_id} não foi salvo antes do timer")
+            row.timer_alerts_sent = ",".join(
+                str(value) for value in timer.get("alerts_sent", [])
+            )
+            row.timer_next_alert_minutes = timer.get("next_alert_minutes")
+            row.timer_last_checked_at = utcnow()
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return row
+
     # -- timer em pending --------------------------------------------- #
     def process_pending_timers(self, ticket: dict, audits: list[dict]) -> dict:
         ticket_id = int(ticket["id"])
+        tags = set(ticket.get("tags") or [])
+        alerts = sorted(Config.PENDING_TIMER_ALERTS, key=lambda item: item["minutes"])
+        control_tags = {Config.PENDING_TIMER_ARMED_TAG}
+        control_tags.update(str(alert["tag"]) for alert in alerts)
+
         if ticket.get("status") != "pending":
-            return {"status": "not_pending", "notes_sent": [], "tags_added": []}
+            tags_removed = sorted(tags & control_tags)
+            if tags_removed:
+                tags.difference_update(control_tags)
+                self.client.update_ticket_tags(
+                    ticket_id,
+                    list(tags),
+                    ticket.get("updated_at"),
+                )
+            return {
+                "status": "disarmed" if tags_removed else "not_pending",
+                "notes_sent": [],
+                "tags_added": [],
+                "tags_removed": tags_removed,
+                "alerts_sent": [],
+                "next_alert_minutes": None,
+            }
 
         pending_since = current_pending_started_at(
             audits,
@@ -187,28 +224,37 @@ class MetricSyncer:
             ticket_created_at=ticket.get("created_at"),
         )
         if pending_since is None:
-            return {"status": "pending_since_unknown", "notes_sent": [], "tags_added": []}
+            return {
+                "status": "pending_since_unknown",
+                "notes_sent": [],
+                "tags_added": [],
+                "tags_removed": [],
+                "alerts_sent": [],
+                "next_alert_minutes": alerts[0]["minutes"] if alerts else None,
+            }
 
         elapsed = round((datetime.now(timezone.utc) - pending_since).total_seconds() / 60, 2)
-        tags = set(ticket.get("tags") or [])
         updated_stamp = ticket.get("updated_at")
         tags_added: list[str] = []
         notes_sent: list[int] = []
 
         if Config.PENDING_TIMER_ARMED_TAG not in tags:
             tags.add(Config.PENDING_TIMER_ARMED_TAG)
-            updated = self.client.update_ticket_tags(ticket_id, list(tags), updated_stamp)
-            tags = set(updated.get("tags") or tags)
-            updated_stamp = updated.get("updated_at") or updated_stamp
             tags_added.append(Config.PENDING_TIMER_ARMED_TAG)
 
-        for alert in Config.PENDING_TIMER_ALERTS:
-            minutes = int(alert["minutes"])
-            tag = str(alert["tag"])
-            if elapsed < minutes or tag in tags:
-                continue
-
-            tags.add(tag)
+        due_alerts = [
+            alert
+            for alert in alerts
+            if elapsed >= int(alert["minutes"]) and str(alert["tag"]) not in tags
+        ]
+        if due_alerts:
+            # Se o serviço ficou fora do ar, registra os marcos antigos como
+            # superados e envia somente a mensagem mais urgente, evitando spam.
+            for alert in due_alerts:
+                tag = str(alert["tag"])
+                tags.add(tag)
+                tags_added.append(tag)
+            alert = due_alerts[-1]
             updated = self.client.add_private_comment_with_tags(
                 ticket_id,
                 str(alert["message"]),
@@ -216,9 +262,27 @@ class MetricSyncer:
                 updated_stamp,
             )
             tags = set(updated.get("tags") or tags)
-            updated_stamp = updated.get("updated_at") or updated_stamp
-            tags_added.append(tag)
-            notes_sent.append(minutes)
+            notes_sent.append(int(alert["minutes"]))
+        elif tags_added:
+            updated = self.client.update_ticket_tags(ticket_id, list(tags), updated_stamp)
+            tags = set(updated.get("tags") or tags)
+
+        alerts_sent = [
+            int(alert["minutes"])
+            for alert in alerts
+            if str(alert["tag"]) in tags
+        ]
+        next_alert = next(
+            (
+                int(alert["minutes"])
+                for alert in alerts
+                if str(alert["tag"]) not in tags
+            ),
+            None,
+        )
+        sla_state = "breached" if elapsed >= Config.PENDING_SLA_MINUTES else "on_track"
+        if sla_state == "on_track" and elapsed >= max(Config.PENDING_SLA_MINUTES - 5, 0):
+            sla_state = "at_risk"
 
         return {
             "status": "pending",
@@ -226,6 +290,10 @@ class MetricSyncer:
             "elapsed_minutes": elapsed,
             "notes_sent": notes_sent,
             "tags_added": tags_added,
+            "tags_removed": [],
+            "alerts_sent": alerts_sent,
+            "next_alert_minutes": next_alert,
+            "sla_state": sla_state,
         }
 
     # -- entradas publicas -------------------------------------------- #
@@ -254,6 +322,7 @@ class MetricSyncer:
         country = self._country_label(ticket)
         row = self.upsert_response(ticket, response_result, requester_email, country)
         timer = self.process_pending_timers(ticket, audits)
+        row = self.update_timer_state(ticket_id, timer)
 
         export_path = self.export_response_metrics() if export else None
         return {

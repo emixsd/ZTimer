@@ -7,7 +7,17 @@ escrito de volta no campo do Zendesk. O dashboard "oficial" é o Explore
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, String, create_engine, inspect, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from config import Config
@@ -68,10 +78,21 @@ class RequesterResponseLog(Base):
     # Nomes legados: hoje guardam a primeira/ultima saida de pending.
     first_opened_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_pending_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    current_pending_elapsed_minutes: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
 
     ticket_form_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     ticket_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    timer_alerts_sent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    timer_next_alert_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    timer_last_checked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -94,9 +115,22 @@ class RequesterResponseLog(Base):
             "last_exited_at": self.last_response_at.isoformat() if self.last_response_at else None,
             "first_opened_at": self.first_opened_at.isoformat() if self.first_opened_at else None,
             "last_response_at": self.last_response_at.isoformat() if self.last_response_at else None,
+            "current_pending_at": self.current_pending_at.isoformat()
+            if self.current_pending_at
+            else None,
+            "current_pending_elapsed_minutes": self.current_pending_elapsed_minutes,
             "ticket_form_id": self.ticket_form_id,
             "ticket_status": self.ticket_status,
             "subject": self.subject,
+            "timer_alerts_sent": [
+                int(value)
+                for value in (self.timer_alerts_sent or "").split(",")
+                if value
+            ],
+            "timer_next_alert_minutes": self.timer_next_alert_minutes,
+            "timer_last_checked_at": self.timer_last_checked_at.isoformat()
+            if self.timer_last_checked_at
+            else None,
             "computed_at": self.computed_at.isoformat() if self.computed_at else None,
         }
 
@@ -131,14 +165,29 @@ def _add_missing_columns() -> None:
         "first_pending_at": "DateTime",
         "first_opened_at": "DateTime",
         "last_response_at": "DateTime",
+        "current_pending_at": "DateTime",
+        "current_pending_elapsed_minutes": "Float",
+        "timer_alerts_sent": "String",
+        "timer_next_alert_minutes": "Integer",
+        "timer_last_checked_at": "DateTime",
     }
     missing = {name: kind for name, kind in needed.items() if name not in existing}
     if not missing:
         return
 
     type_map = {
-        "sqlite": {"DateTime": "DATETIME"},
-        "postgresql": {"DateTime": "TIMESTAMP WITH TIME ZONE"},
+        "sqlite": {
+            "DateTime": "DATETIME",
+            "Float": "FLOAT",
+            "String": "VARCHAR(100)",
+            "Integer": "INTEGER",
+        },
+        "postgresql": {
+            "DateTime": "TIMESTAMP WITH TIME ZONE",
+            "Float": "DOUBLE PRECISION",
+            "String": "VARCHAR(100)",
+            "Integer": "INTEGER",
+        },
     }
     dialect_types = type_map.get(engine.dialect.name, type_map["sqlite"])
     with engine.begin() as conn:

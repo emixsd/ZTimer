@@ -3,140 +3,205 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ztimer</title>
+  <meta name="theme-color" content="#102a2d">
+  <title>ZTimer · Operação N2</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --panel-soft: #eef6f4;
-      --text: #17202a;
-      --muted: #687385;
-      --line: #dce2e8;
-      --accent: #137c6b;
-      --accent-dark: #0f5e52;
-      --danger: #b42318;
-      --warning: #a15c07;
-      --shadow: 0 8px 24px rgba(23, 32, 42, 0.08);
+      --ink: #173033;
+      --muted: #6c7c7d;
+      --canvas: #f3f6f4;
+      --surface: #ffffff;
+      --surface-soft: #f7faf8;
+      --line: #dce6e1;
+      --brand: #087f6d;
+      --brand-dark: #065e52;
+      --navy: #102a2d;
+      --blue: #2563a5;
+      --amber: #b45f06;
+      --red: #bd2c20;
+      --green-soft: #e3f3ee;
+      --amber-soft: #fff2d9;
+      --red-soft: #ffebe8;
+      --blue-soft: #e8f1fb;
+      --shadow: 0 12px 34px rgba(21, 48, 51, .08);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, "Segoe UI", Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.45;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(8, 127, 109, .08), transparent 25rem),
+        var(--canvas);
+      color: var(--ink);
+      font: 15px/1.45 Inter, "Segoe UI", system-ui, sans-serif;
     }
 
+    button, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
     .shell {
-      width: min(1180px, calc(100% - 32px));
+      width: min(1380px, calc(100% - 40px));
       margin: 0 auto;
-      padding: 24px 0 36px;
+      padding: 26px 0 44px;
     }
 
     .topbar {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 18px;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 13px;
+      background: var(--navy);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(16, 42, 45, .2);
+      font-size: 20px;
+      font-weight: 850;
     }
 
     h1 {
       margin: 0;
-      font-size: 26px;
-      font-weight: 750;
-      letter-spacing: 0;
+      font-size: 23px;
+      line-height: 1.1;
+      letter-spacing: -.02em;
     }
 
     .subtitle {
       margin: 4px 0 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
     }
 
-    .actions {
+    .top-status {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .filter-form {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .date-input {
-      min-height: 38px;
-      padding: 7px 10px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--text);
-      font: inherit;
-      font-weight: 600;
-    }
-
-    .date-field {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      gap: 10px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #8a9696;
+      box-shadow: 0 0 0 4px rgba(138, 150, 150, .14);
+    }
+
+    .status-dot.ok {
+      background: #12a47f;
+      box-shadow: 0 0 0 4px rgba(18, 164, 127, .14);
+    }
+
+    .notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border: 1px solid #f0cf8c;
+      border-radius: 10px;
+      background: var(--amber-soft);
+      color: #70420c;
+    }
+
+    .notice.success {
+      border-color: #b9dfd2;
+      background: var(--green-soft);
+      color: var(--brand-dark);
+    }
+
+    .notice strong { display: block; }
+    .notice span { font-size: 13px; }
+
+    .toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .88);
+      box-shadow: var(--shadow);
+    }
+
+    .filter-form, .toolbar-actions {
+      display: flex;
+      align-items: end;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
       font-weight: 750;
+      letter-spacing: .05em;
       text-transform: uppercase;
     }
 
+    .input {
+      min-height: 40px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      outline: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .input:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(8, 127, 109, .12);
+    }
+
+    .search { width: min(280px, 32vw); }
+
     .button {
       display: inline-flex;
+      min-height: 40px;
       align-items: center;
       justify-content: center;
-      min-height: 38px;
-      padding: 8px 12px;
+      gap: 7px;
+      padding: 8px 13px;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--text);
-      font-weight: 650;
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 700;
       text-decoration: none;
       white-space: nowrap;
     }
 
-    .button.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: #ffffff;
-    }
-
-    .button.danger {
-      min-height: 30px;
-      padding: 5px 9px;
-      border-color: #f1c8c3;
-      color: var(--danger);
-      background: #fff7f6;
-      font-size: 13px;
-    }
-
-    .button:hover {
-      border-color: var(--accent);
-    }
-
-    .button.primary:hover {
-      background: var(--accent-dark);
-    }
-
-    .button.danger:hover {
-      border-color: var(--danger);
-    }
+    .button:hover { border-color: #9db4ad; background: var(--surface-soft); }
+    .button.primary { border-color: var(--brand); background: var(--brand); color: #fff; }
+    .button.primary:hover { background: var(--brand-dark); }
+    .button.ghost { min-height: 32px; padding: 5px 9px; font-size: 12px; }
+    .button.danger { color: var(--red); }
 
     .stats {
       display: grid;
@@ -146,262 +211,426 @@
     }
 
     .stat {
-      min-height: 94px;
-      padding: 14px;
+      position: relative;
+      min-height: 126px;
+      overflow: hidden;
+      padding: 17px 18px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      border-radius: 12px;
+      background: var(--surface);
       box-shadow: var(--shadow);
     }
 
+    .stat::after {
+      position: absolute;
+      right: -20px;
+      bottom: -32px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--green-soft);
+      content: "";
+      opacity: .7;
+    }
+
+    .stat.attention::after { background: var(--red-soft); }
+    .stat.sla::after { background: var(--blue-soft); }
+    .stat.average::after { background: var(--amber-soft); }
+
     .stat-label {
+      position: relative;
+      z-index: 1;
       color: var(--muted);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 750;
+      letter-spacing: .04em;
       text-transform: uppercase;
     }
 
     .stat-value {
-      margin-top: 8px;
-      font-size: 26px;
-      font-weight: 780;
+      position: relative;
+      z-index: 1;
+      margin-top: 9px;
+      font-size: 32px;
+      font-weight: 820;
+      letter-spacing: -.04em;
+      line-height: 1;
     }
 
     .stat-note {
-      margin-top: 3px;
+      position: relative;
+      z-index: 1;
+      margin-top: 8px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      box-shadow: var(--shadow);
       overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
     }
 
     .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 14px 16px;
+      gap: 18px;
+      padding: 17px 18px;
       border-bottom: 1px solid var(--line);
-      background: var(--panel-soft);
     }
 
-    .panel-title {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 750;
-    }
+    .panel-title { margin: 0; font-size: 16px; }
+    .panel-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 
-    .meta {
+    .scan-meta {
+      display: flex;
+      align-items: center;
+      gap: 9px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       text-align: right;
     }
 
-    .table-wrap {
-      overflow-x: auto;
-    }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; min-width: 1120px; border-collapse: collapse; }
 
-    table {
-      width: 100%;
-      min-width: 960px;
-      border-collapse: collapse;
-    }
-
-    th,
-    td {
-      padding: 11px 12px;
-      border-bottom: 1px solid var(--line);
+    th, td {
+      padding: 13px 12px;
+      border-bottom: 1px solid #e8eeeb;
       text-align: left;
       vertical-align: middle;
-      white-space: nowrap;
     }
 
     th {
-      background: #fbfcfd;
+      background: var(--surface-soft);
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 750;
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .045em;
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
-    tr:last-child td {
-      border-bottom: 0;
-    }
+    tbody tr:hover { background: #fbfdfc; }
+    tbody tr:last-child td { border-bottom: 0; }
 
-    .ticket {
-      font-weight: 750;
-    }
-
-    .email {
-      max-width: 260px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .number {
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
+    .ticket-link { color: var(--brand-dark); font-weight: 800; text-decoration: none; }
+    .ticket-link:hover { text-decoration: underline; }
+    .person { max-width: 260px; }
+    .subject, .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .subject { max-width: 250px; font-weight: 680; }
+    .email { max-width: 250px; margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .number { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
     .badge {
       display: inline-flex;
+      min-height: 25px;
       align-items: center;
-      min-height: 26px;
+      gap: 5px;
       padding: 3px 8px;
       border-radius: 999px;
-      background: #edf3fb;
-      color: #1f4d7a;
-      font-size: 13px;
-      font-weight: 650;
+      background: #edf1f0;
+      color: #50605f;
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
     }
 
-    .empty {
-      padding: 34px 16px;
+    .badge.on-track { background: var(--green-soft); color: var(--brand-dark); }
+    .badge.at-risk { background: var(--amber-soft); color: var(--amber); }
+    .badge.breached { background: var(--red-soft); color: var(--red); }
+    .badge.pending { background: var(--blue-soft); color: var(--blue); }
+
+    .timer { min-width: 205px; }
+    .timer-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .timer-value { font-weight: 820; font-variant-numeric: tabular-nums; }
+    .progress {
+      height: 6px;
+      margin-top: 8px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #e8eeeb;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+
+    .timer.at-risk .progress > span { background: #e28a16; }
+    .timer.breached .progress > span { background: var(--red); }
+    .timer-note { margin-top: 5px; color: var(--muted); font-size: 11px; }
+
+    .milestones { display: flex; gap: 4px; margin-top: 5px; }
+    .milestone {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #edf1f0;
       color: var(--muted);
-      text-align: center;
+      font-size: 10px;
+      font-weight: 750;
     }
 
-    @media (max-width: 820px) {
-      .topbar {
-        flex-direction: column;
-      }
+    .actions-cell { display: flex; gap: 6px; }
+    .empty { padding: 55px 20px; color: var(--muted); text-align: center; }
+    .empty strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 16px; }
+    [hidden] { display: none !important; }
 
-      .actions {
-        width: 100%;
-        justify-content: flex-start;
-      }
-
-      .stats {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+    @media (max-width: 980px) {
+      .toolbar { align-items: stretch; flex-direction: column; }
+      .toolbar-actions { justify-content: space-between; }
+      .search { width: min(420px, 60vw); }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
-    @media (max-width: 520px) {
-      .shell {
-        width: min(100% - 20px, 1180px);
-        padding-top: 14px;
-      }
-
-      .stats {
-        grid-template-columns: 1fr;
-      }
-
-      .button {
-        width: 100%;
-      }
-
-      .panel-head {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .meta {
-        text-align: left;
-      }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 20px, 1380px); padding-top: 16px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .top-status { padding-left: 56px; }
+      .notice { align-items: flex-start; flex-direction: column; }
+      .filter-form, .toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .field, .search { width: 100%; }
+      .field.search-field { grid-column: 1 / -1; }
+      .stats { grid-template-columns: 1fr; }
+      .stat { min-height: 112px; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+      .scan-meta { text-align: left; }
     }
   </style>
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div>
-        <h1>Ztimer</h1>
-        <p class="subtitle">Seguro Viagem/N2 - tempo em pending</p>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">Z</div>
+        <div>
+          <h1>ZTimer</h1>
+          <p class="subtitle">Operação Seguro Viagem · N2</p>
+        </div>
       </div>
-      <nav class="actions" aria-label="Ações do painel">
-        <form class="filter-form" action="/dashboard" method="get">
-          <label class="date-field">
-            <span>De</span>
-            <input class="date-input" type="date" name="date_from" value="{{ date_from }}">
-          </label>
-          <label class="date-field">
-            <span>Até</span>
-            <input class="date-input" type="date" name="date_to" value="{{ date_to }}">
-          </label>
-          <button class="button" type="submit">Filtrar</button>
-        </form>
-        <a class="button" href="/dashboard">Limpar</a>
-        <a class="button primary" href="{{ export_url }}">Baixar CSV</a>
-      </nav>
+      <div class="top-status">
+        <span class="status-dot {{ 'ok' if zendesk_configured and timer_loop_started else '' }}"></span>
+        {% if zendesk_configured and timer_loop_started %}
+          Monitor ativo · varredura a cada {{ (timer_interval_seconds / 60)|round|int }} min
+        {% elif not zendesk_configured %}
+          Zendesk não configurado
+        {% else %}
+          Monitor automático inativo
+        {% endif %}
+      </div>
     </header>
 
-    <section class="stats" aria-label="Resumo">
+    {% if not zendesk_configured or not timer_loop_started %}
+    <div class="notice" role="alert">
+      <div>
+        <strong>O ZTimer está parcialmente inativo</strong>
+        <span>
+          {% if not zendesk_configured %}
+            Configure ZENDESK_SUBDOMAIN, ZENDESK_EMAIL e ZENDESK_API_TOKEN para enviar avisos.
+          {% else %}
+            O acesso ao Zendesk existe, mas a rotina automática de avisos não iniciou.
+          {% endif %}
+        </span>
+      </div>
+      <a class="button" href="/health">Ver diagnóstico</a>
+    </div>
+    {% endif %}
+
+    {% if deleted %}
+    <div class="notice success" role="status">
+      <div><strong>Ticket #{{ deleted }} removido</strong><span>O painel e o CSV já foram atualizados.</span></div>
+    </div>
+    {% endif %}
+
+    <section class="toolbar" aria-label="Filtros do painel">
+      <form class="filter-form" action="/dashboard" method="get">
+        <label class="field">
+          <span>De</span>
+          <input class="input" type="date" name="date_from" value="{{ date_from }}">
+        </label>
+        <label class="field">
+          <span>Até</span>
+          <input class="input" type="date" name="date_to" value="{{ date_to }}">
+        </label>
+        <button class="button primary" type="submit">Aplicar período</button>
+        <a class="button" href="/dashboard">Limpar</a>
+      </form>
+      <div class="toolbar-actions">
+        <label class="field search-field">
+          <span>Buscar na lista</span>
+          <input class="input search" id="table-search" type="search" placeholder="Ticket, pessoa, país..." autocomplete="off">
+        </label>
+        <button class="button" type="button" onclick="location.reload()">Atualizar</button>
+        <a class="button" href="{{ export_url }}">Baixar CSV</a>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Resumo da operação">
       <article class="stat">
-        <div class="stat-label">Tickets</div>
-        <div class="stat-value">{{ total }}</div>
-        <div class="stat-note">form {{ target_forms|join(", ") }}</div>
+        <div class="stat-label">Em pending agora</div>
+        <div class="stat-value">{{ active_count }}</div>
+        <div class="stat-note">{{ total }} ticket{{ '' if total == 1 else 's' }} no período · SLA de {{ sla_minutes }} min</div>
       </article>
-      <article class="stat">
-        <div class="stat-label">Primeira Resposta</div>
-        <div class="stat-value">{{ "%.1f"|format(avg_first) if avg_first is not none else "-" }}</div>
-        <div class="stat-note">até sair de pending</div>
+      <article class="stat attention">
+        <div class="stat-label">Pedem atenção</div>
+        <div class="stat-value">{{ at_risk_count + breached_count }}</div>
+        <div class="stat-note">{{ at_risk_count }} próximo{{ '' if at_risk_count == 1 else 's' }} do limite · {{ breached_count }} excedido{{ '' if breached_count == 1 else 's' }}</div>
       </article>
-      <article class="stat">
-        <div class="stat-label">Tempo Total Pending</div>
-        <div class="stat-value">{{ "%.1f"|format(avg_total) if avg_total is not none else "-" }}</div>
-        <div class="stat-note">soma dos períodos</div>
+      <article class="stat sla">
+        <div class="stat-label">Dentro do SLA</div>
+        <div class="stat-value">{{ (sla_compliance|string + '%') if sla_compliance is not none else '—' }}</div>
+        <div class="stat-note">considera a primeira saída de pending</div>
       </article>
-      <article class="stat">
-        <div class="stat-label">Filtro</div>
-        <div class="stat-value">{{ filter_label }}</div>
-        <div class="stat-note">período da resposta</div>
+      <article class="stat average">
+        <div class="stat-label">Média de resposta</div>
+        <div class="stat-value">{{ "%.1f min"|format(avg_first) if avg_first is not none else "—" }}</div>
+        <div class="stat-note">tempo médio até a primeira resposta</div>
       </article>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2 class="panel-title">Tickets Processados</h2>
-        <div class="meta">Último cálculo: {{ last_sync if last_sync else "-" }}</div>
+        <div>
+          <h2 class="panel-title">Fila monitorada</h2>
+          <p class="panel-subtitle">{{ filter_label }} · tickets urgentes aparecem primeiro</p>
+        </div>
+        <div class="scan-meta">
+          <span class="status-dot {{ 'ok' if scan_state.completed_at and not scan_state.last_error else '' }}"></span>
+          <span>
+            {% if scan_state.running %}
+              Varredura em andamento
+            {% elif scan_state.completed_at %}
+              Última varredura <time datetime="{{ scan_state.completed_at }}">{{ scan_state.completed_at }}</time>
+              · {{ scan_state.processed }} processados
+            {% else %}
+              Aguardando a primeira varredura
+            {% endif %}
+          </span>
+        </div>
       </div>
 
       {% if rows %}
       <div class="table-wrap">
-        <table>
+        <table id="tickets-table">
           <thead>
             <tr>
               <th>Ticket</th>
-              <th>Email Solicitante</th>
+              <th>Solicitante</th>
               <th>País</th>
-              <th class="number">Primeira Resposta</th>
-              <th class="number">Tempo Total Pending</th>
+              <th>Timer atual</th>
+              <th>1ª resposta</th>
+              <th>Total pending</th>
               <th>Status</th>
-              <th>Calculado Em</th>
+              <th>Atualizado</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
-            <tr>
-              <td class="ticket">{{ row.ticket_id }}</td>
-              <td class="email" title="{{ row.requester_email or '' }}">{{ row.requester_email or "-" }}</td>
-              <td>{{ row.country or "-" }}</td>
-              <td class="number">{{ "%.1f min"|format(row.first_response_minutes) if row.first_response_minutes is not none else "-" }}</td>
-              <td class="number">{{ "%.1f min"|format(row.total_response_minutes) if row.total_response_minutes is not none else "-" }}</td>
-              <td><span class="badge">{{ row.ticket_status or "-" }}</span></td>
-              <td>{{ row.computed_at or "-" }}</td>
+            <tr data-search="{{ row.ticket_id }} {{ row.requester_email or '' }} {{ row.country or '' }} {{ row.subject or '' }}">
               <td>
-                <form method="post" action="/requester-responses/{{ row.ticket_id }}/delete" onsubmit="return confirm('Excluir este ticket do painel?');">
-                  <input type="hidden" name="date_from" value="{{ date_from }}">
-                  <input type="hidden" name="date_to" value="{{ date_to }}">
-                  <input type="hidden" name="limit" value="{{ limit }}">
-                  <button class="button danger" type="submit">Excluir</button>
-                </form>
+                {% if zendesk_base_url %}
+                  <a class="ticket-link" href="{{ zendesk_base_url }}/{{ row.ticket_id }}" target="_blank" rel="noopener">#{{ row.ticket_id }}</a>
+                {% else %}
+                  <span class="ticket-link">#{{ row.ticket_id }}</span>
+                {% endif %}
+              </td>
+              <td class="person">
+                <div class="subject" title="{{ row.subject or '' }}">{{ row.subject or "Sem assunto" }}</div>
+                <div class="email" title="{{ row.requester_email or '' }}">{{ row.requester_email or "E-mail não disponível" }}</div>
+              </td>
+              <td>{{ row.country or "—" }}</td>
+              <td>
+                {% if row.live_pending_minutes is not none %}
+                <div class="timer {{ row.sla_state }}">
+                  <div class="timer-top">
+                    <span class="timer-value">{{ "%.1f min"|format(row.live_pending_minutes) }}</span>
+                    <span class="badge {{ row.sla_state }}">{{ row.sla_label }}</span>
+                  </div>
+                  <div class="progress" aria-label="{{ row.sla_percent }}% do SLA consumido">
+                    <span style="width: {{ row.sla_percent }}%"></span>
+                  </div>
+                  <div class="timer-note">
+                    {% if row.timer_next_alert_minutes %}
+                      Próximo aviso: {{ row.timer_next_alert_minutes }} min
+                    {% else %}
+                      Todos os marcos processados
+                    {% endif %}
+                  </div>
+                  {% if row.timer_alerts_sent %}
+                  <div class="milestones" aria-label="Avisos processados">
+                    {% for minute in row.timer_alerts_sent %}<span class="milestone">{{ minute }}m ✓</span>{% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                {% else %}
+                  <span class="badge">Timer encerrado</span>
+                {% endif %}
+              </td>
+              <td class="number">{{ "%.1f min"|format(row.first_response_minutes) if row.first_response_minutes is not none else "—" }}</td>
+              <td class="number">{{ "%.1f min"|format(row.total_response_minutes) if row.total_response_minutes is not none else "—" }}</td>
+              <td><span class="badge {{ 'pending' if row.ticket_status == 'pending' else '' }}">{{ row.ticket_status or "—" }}</span></td>
+              <td class="number"><time datetime="{{ row.computed_at }}">{{ row.computed_at or "—" }}</time></td>
+              <td>
+                <div class="actions-cell">
+                  {% if zendesk_base_url %}
+                  <a class="button ghost" href="{{ zendesk_base_url }}/{{ row.ticket_id }}" target="_blank" rel="noopener">Abrir</a>
+                  {% endif %}
+                  <form method="post" action="/requester-responses/{{ row.ticket_id }}/delete" onsubmit="return confirm('Remover o ticket #{{ row.ticket_id }} somente do ZTimer?');">
+                    <input type="hidden" name="date_from" value="{{ date_from }}">
+                    <input type="hidden" name="date_to" value="{{ date_to }}">
+                    <input type="hidden" name="limit" value="{{ limit }}">
+                    <button class="button ghost danger" type="submit">Excluir</button>
+                  </form>
+                </div>
               </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      <div class="empty" id="search-empty" hidden><strong>Nada encontrado</strong>Tente outro ticket, e-mail ou país.</div>
       {% else %}
-      <div class="empty">Nenhum ticket processado ainda.</div>
+      <div class="empty"><strong>A fila ainda está vazia</strong>Os tickets aparecerão após a primeira sincronização com o Zendesk.</div>
       {% endif %}
     </section>
   </main>
+
+  <script>
+    const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "America/Sao_Paulo"
+    });
+
+    document.querySelectorAll("time[datetime]").forEach((node) => {
+      const value = node.getAttribute("datetime");
+      if (!value) return;
+      const date = new Date(value);
+      if (!Number.isNaN(date.valueOf())) {
+        node.textContent = dateFormatter.format(date);
+        node.title = value;
+      }
+    });
+
+    const search = document.querySelector("#table-search");
+    const rows = [...document.querySelectorAll("#tickets-table tbody tr")];
+    const searchEmpty = document.querySelector("#search-empty");
+    search?.addEventListener("input", () => {
+      const query = search.value.trim().toLocaleLowerCase("pt-BR");
+      let visible = 0;
+      rows.forEach((row) => {
+        const matches = !query || row.dataset.search.toLocaleLowerCase("pt-BR").includes(query);
+        row.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visible !== 0;
+    });
+  </script>
 </body>
 </html>

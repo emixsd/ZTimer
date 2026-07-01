@@ -70,6 +70,7 @@ class Config:
     PENDING_TIMER_SYNC_QUERY = os.getenv(
         "PENDING_TIMER_SYNC_QUERY", "type:ticket status:pending"
     )
+    PENDING_SLA_MINUTES = max(int(os.getenv("PENDING_SLA_MINUTES", "60")), 1)
 
     # Exportação consumida pelo Excel/Power Query.
     EXPORT_DIR = os.getenv("EXPORT_DIR", "exports")
@@ -83,33 +84,41 @@ class Config:
         {
             "minutes": 10,
             "tag": "nota_pendente_10m_ok",
+            "level": "info",
             "message": (
-                "\u23f1\ufe0f 10 min\n"
-                "Verifique se o prestador confirmou o recebimento. Caso contrário, ligue."
+                "⏱️ ZTimer · 10 min em Pendente\n"
+                "Confirme se o prestador recebeu o acionamento. Sem confirmação? "
+                "Faça contato por telefone e registre a tentativa."
             ),
         },
         {
             "minutes": 30,
             "tag": "nota_pendente_30m_ok",
+            "level": "warning",
             "message": (
-                "\u26a0\ufe0f 30 min\n"
-                "Próximos de ultrapassar o SLA! Cobre o prestador ou acione o próximo da IT!"
+                "⚠️ ZTimer · 30 min em Pendente\n"
+                "Metade do SLA consumida. Cobre o prestador agora; sem retorno, "
+                "acione o próximo contato da IT."
             ),
         },
         {
             "minutes": 55,
             "tag": "nota_pendente_55m_ok",
+            "level": "critical",
             "message": (
-                "\U0001f6a8 55 min\n"
-                "ATENÇÃO! 60 MINUTOS PRÓXIMOS! Envie dados ou adéque expectativa!"
+                "🚨 ZTimer · 55 min em Pendente\n"
+                "Faltam 5 min para o SLA. Envie os dados disponíveis ou alinhe "
+                "imediatamente a expectativa de prazo com o solicitante."
             ),
         },
         {
             "minutes": 60,
             "tag": "nota_pendente_60m_ok",
+            "level": "breached",
             "message": (
-                "\U0001f6a8 60 min\n"
-                "ATENÇÃO! SLA EXCEDIDO! Envie dados imediatamente ou comunique o atraso."
+                "🔴 ZTimer · SLA excedido (60 min)\n"
+                "O ticket ultrapassou o SLA. Envie os dados imediatamente ou "
+                "comunique o atraso e registre o próximo passo."
             ),
         },
     ]

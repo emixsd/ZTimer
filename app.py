@@ -3,7 +3,7 @@ import logging
 import os
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import func, select
@@ -19,6 +19,17 @@ init_db()
 _syncer = None
 _timer_loop_started = False
 _timer_loop_lock = threading.Lock()
+_scan_run_lock = threading.Lock()
+_scan_state_lock = threading.Lock()
+_scan_state = {
+    "running": False,
+    "started_at": None,
+    "completed_at": None,
+    "processed": 0,
+    "notes_sent": 0,
+    "errors_count": 0,
+    "last_error": None,
+}
 
 
 def get_syncer() -> MetricSyncer:
@@ -32,8 +43,52 @@ def _zendesk_configured() -> bool:
     return bool(Config.ZENDESK_SUBDOMAIN and Config.ZENDESK_EMAIL and Config.ZENDESK_API_TOKEN)
 
 
-def _run_pending_timer_scan() -> dict:
-    return get_syncer().sync_query(Config.PENDING_TIMER_SYNC_QUERY)
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _scan_state_snapshot() -> dict:
+    with _scan_state_lock:
+        return dict(_scan_state)
+
+
+def _run_pending_timer_scan(query: str = None) -> dict:
+    if not _scan_run_lock.acquire(blocking=False):
+        return {"status": "already_running", **_scan_state_snapshot()}
+
+    with _scan_state_lock:
+        _scan_state.update(
+            running=True,
+            started_at=_iso_now(),
+            last_error=None,
+        )
+    try:
+        result = get_syncer().sync_query(query or Config.PENDING_TIMER_SYNC_QUERY)
+        with _scan_state_lock:
+            _scan_state.update(
+                running=False,
+                completed_at=_iso_now(),
+                processed=result.get("processed", 0),
+                notes_sent=result.get("timer_notes_sent", 0),
+                errors_count=result.get("errors_count", 0),
+                last_error=(
+                    result.get("errors", [{}])[0].get("error")
+                    if result.get("errors")
+                    else None
+                ),
+            )
+        return result
+    except Exception as exc:
+        with _scan_state_lock:
+            _scan_state.update(
+                running=False,
+                completed_at=_iso_now(),
+                errors_count=1,
+                last_error=str(exc),
+            )
+        raise
+    finally:
+        _scan_run_lock.release()
 
 
 def _pending_timer_loop() -> None:
@@ -123,8 +178,59 @@ def _parse_date(value: str):
         return None
 
 
+def _bounded_int(value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, minimum), maximum)
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _live_pending_minutes(row: RequesterResponseLog):
+    if row.ticket_status != "pending" or row.current_pending_at is None:
+        return None
+    return max(
+        round(
+            (datetime.now(timezone.utc) - _aware_utc(row.current_pending_at)).total_seconds()
+            / 60,
+            1,
+        ),
+        0.0,
+    )
+
+
+def _dashboard_row(row: RequesterResponseLog) -> dict:
+    data = row.to_dict()
+    elapsed = _live_pending_minutes(row)
+    data["live_pending_minutes"] = elapsed
+    data["sla_percent"] = (
+        min(round((elapsed / Config.PENDING_SLA_MINUTES) * 100), 100)
+        if elapsed is not None and Config.PENDING_SLA_MINUTES > 0
+        else 0
+    )
+    if elapsed is None:
+        data["sla_state"] = "done"
+        data["sla_label"] = "Fora de pending"
+    elif elapsed >= Config.PENDING_SLA_MINUTES:
+        data["sla_state"] = "breached"
+        data["sla_label"] = "SLA excedido"
+    elif elapsed >= max(Config.PENDING_SLA_MINUTES - 5, 0):
+        data["sla_state"] = "at-risk"
+        data["sla_label"] = "Atenção imediata"
+    else:
+        data["sla_state"] = "on-track"
+        data["sla_label"] = "Dentro do SLA"
+    return data
+
+
 def _row_reference_date(row: RequesterResponseLog):
-    dt = row.first_opened_at or row.computed_at
+    dt = row.first_opened_at or row.current_pending_at or row.computed_at
     if dt is None:
         return None
     if isinstance(dt, str):
@@ -166,7 +272,7 @@ def _dashboard_args_from_form(form) -> dict:
 @app.get("/dashboard")
 def dashboard():
     """Painel HTML de consulta para o time."""
-    limit = min(int(request.args.get("limit", 100)), 500)
+    limit = _bounded_int(request.args.get("limit"), 100, 10, 500)
     legacy_date_raw = request.args.get("date", "")
     date_from_raw = request.args.get("date_from", "")
     date_to_raw = request.args.get("date_to", "")
@@ -193,6 +299,14 @@ def dashboard():
     else:
         filtered_rows = all_rows
 
+    filtered_rows.sort(
+        key=lambda row: (
+            row.ticket_status == "pending",
+            _live_pending_minutes(row) or -1,
+            _aware_utc(row.computed_at).timestamp() if row.computed_at else 0,
+        ),
+        reverse=True,
+    )
     rows = filtered_rows[:limit]
     total = len(filtered_rows)
     first_values = [
@@ -206,11 +320,45 @@ def dashboard():
     avg_first = sum(first_values) / len(first_values) if first_values else None
     avg_total = sum(total_values) / len(total_values) if total_values else None
     last_sync = max((row.computed_at for row in filtered_rows if row.computed_at), default=None)
+    dashboard_rows = [_dashboard_row(row) for row in rows]
+    active_elapsed = [
+        value
+        for value in (_live_pending_minutes(row) for row in filtered_rows)
+        if value is not None
+    ]
+    active_count = len(active_elapsed)
+    breached_count = sum(
+        value >= Config.PENDING_SLA_MINUTES for value in active_elapsed
+    )
+    at_risk_count = sum(
+        max(Config.PENDING_SLA_MINUTES - 5, 0)
+        <= value
+        < Config.PENDING_SLA_MINUTES
+        for value in active_elapsed
+    )
+    completed_with_sla = [
+        value for value in first_values if value is not None
+    ]
+    sla_compliance = (
+        round(
+            sum(value <= Config.PENDING_SLA_MINUTES for value in completed_with_sla)
+            / len(completed_with_sla)
+            * 100
+        )
+        if completed_with_sla
+        else None
+    )
+    scan_state = _scan_state_snapshot()
 
     return render_template(
         "dashboard.html",
-        rows=[row.to_dict() for row in rows],
+        rows=dashboard_rows,
         total=total or 0,
+        active_count=active_count,
+        at_risk_count=at_risk_count,
+        breached_count=breached_count,
+        sla_compliance=sla_compliance,
+        sla_minutes=Config.PENDING_SLA_MINUTES,
         avg_first=round(avg_first, 1) if avg_first is not None else None,
         avg_total=round(avg_total, 1) if avg_total is not None else None,
         last_sync=last_sync.isoformat() if last_sync else None,
@@ -221,6 +369,16 @@ def dashboard():
         date_to=date_to.isoformat() if date_to else "",
         filter_label=_date_range_label(date_from, date_to),
         limit=limit,
+        zendesk_base_url=(
+            f"https://{Config.ZENDESK_SUBDOMAIN}.zendesk.com/agent/tickets"
+            if Config.ZENDESK_SUBDOMAIN
+            else None
+        ),
+        zendesk_configured=_zendesk_configured(),
+        timer_loop_started=_timer_loop_started,
+        timer_interval_seconds=Config.PENDING_TIMER_LOOP_INTERVAL_SECONDS,
+        scan_state=scan_state,
+        deleted=request.args.get("deleted"),
     )
 
 
@@ -236,7 +394,9 @@ def delete_requester_response(ticket_id: int):
             session.delete(pending_row)
         session.commit()
     export_response_metrics_file()
-    return redirect(url_for("dashboard", **_dashboard_args_from_form(request.form)))
+    args = _dashboard_args_from_form(request.form)
+    args["deleted"] = ticket_id
+    return redirect(url_for("dashboard", **args))
 
 
 @app.post("/zendesk/timer")
@@ -279,8 +439,10 @@ def zendesk_cancel_webhook():
 
 @app.get("/health")
 def health():
+    scan_state = _scan_state_snapshot()
     return jsonify(
-        status="ok",
+        status="ok" if _zendesk_configured() else "degraded",
+        zendesk_configured=_zendesk_configured(),
         measure_mode=Config.MEASURE_MODE,
         field_id=Config.ZENDESK_CUSTOM_FIELD_ID,
         field_unit=Config.FIELD_UNIT,
@@ -291,6 +453,8 @@ def health():
         pending_timer_loop_started=_timer_loop_started,
         pending_timer_loop_interval_seconds=Config.PENDING_TIMER_LOOP_INTERVAL_SECONDS,
         pending_timer_sync_query=Config.PENDING_TIMER_SYNC_QUERY,
+        pending_sla_minutes=Config.PENDING_SLA_MINUTES,
+        timer_scan=scan_state,
     )
 
 
@@ -342,14 +506,14 @@ def timer_scan():
         return jsonify(error="unauthorized"), 401
     body = request.get_json(silent=True) or {}
     query = body.get("query") or Config.PENDING_TIMER_SYNC_QUERY
-    return jsonify(get_syncer().sync_query(query))
+    return jsonify(_run_pending_timer_scan(query))
 
 
 @app.get("/requester-responses")
 def list_requester_responses():
     """Métricas novas: primeira saída de pending e total em pending."""
-    limit = min(int(request.args.get("limit", 100)), 1000)
-    offset = int(request.args.get("offset", 0))
+    limit = _bounded_int(request.args.get("limit"), 100, 1, 1000)
+    offset = _bounded_int(request.args.get("offset"), 0, 0, 1_000_000)
 
     stmt = (
         select(RequesterResponseLog)
@@ -377,8 +541,8 @@ def export_requester_responses():
 @app.get("/metrics")
 def list_metrics():
     """Log local. Filtros: ?status=done|pending  ?limit=100  ?offset=0"""
-    limit = min(int(request.args.get("limit", 100)), 1000)
-    offset = int(request.args.get("offset", 0))
+    limit = _bounded_int(request.args.get("limit"), 100, 1, 1000)
+    offset = _bounded_int(request.args.get("offset"), 0, 0, 1_000_000)
     status = request.args.get("status")
 
     stmt = select(PendingTimeLog).where(PendingTimeLog.entered_pending.is_(True))
