@@ -66,7 +66,6 @@ Principais variáveis:
 ZENDESK_SUBDOMAIN=suaempresa
 ZENDESK_EMAIL=voce@suaempresa.com
 ZENDESK_API_TOKEN=seu_token_de_api
-WEBHOOK_SECRET=
 
 TARGET_TICKET_FORM_IDS=52281638323859
 COUNTRY_CUSTOM_FIELD_ID=44008169716755
@@ -77,6 +76,7 @@ DEFAULT_SYNC_QUERY=type:ticket
 PENDING_TIMER_LOOP_ENABLED=true
 PENDING_TIMER_LOOP_INTERVAL_SECONDS=300
 PENDING_TIMER_SYNC_QUERY=type:ticket status:pending
+PENDING_SLA_MINUTES=60
 
 EXPORT_DIR=exports
 RESPONSE_EXPORT_FILENAME=respostas_solicitantes.csv
@@ -117,6 +117,12 @@ de ser enviados automaticamente.
 Os avisos internos de 10/30/55/60 min dependem de uma varredura enquanto o
 ticket ainda está em `pending`. O serviço roda essa varredura automaticamente a
 cada 5 minutos usando `PENDING_TIMER_SYNC_QUERY`.
+
+Ao sair de `pending`, as tags internas do timer são removidas. Assim, se o mesmo
+ticket voltar a `pending`, um novo ciclo de avisos começa normalmente. Se uma
+varredura encontrar vários marcos vencidos de uma vez, o ZTimer registra todos
+eles, mas envia somente a observação mais urgente para evitar uma sequência de
+notas repetidas.
 
 Forçar varredura dos avisos:
 
@@ -165,6 +171,14 @@ http://localhost:5000/dashboard?date_from=2026-06-01&date_to=2026-06-25
 No dashboard, o botão `Excluir` remove o ticket apenas da base local do ZTimer e
 do CSV exportado; ele não altera o ticket no Zendesk.
 
+O dashboard prioriza tickets ativos e urgentes, exibe o consumo do SLA em tempo
+real e informa se a integração e a varredura automática estão funcionando. Para
+ver o diagnóstico em JSON, acesse:
+
+```text
+http://localhost:5000/health
+```
+
 Exportar para Excel/Power Query:
 
 ```text
@@ -185,3 +199,9 @@ exports/respostas_solicitantes.csv
 - `zendesk_client.py` - cliente da API Zendesk
 - `models.py` - logs locais em SQLAlchemy
 - `config.py` - configuração por env
+
+## Testes
+
+```bash
+python -m unittest discover -s tests -v
+```

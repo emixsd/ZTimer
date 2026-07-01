@@ -69,6 +69,8 @@ class RequesterResponseResult:
     first_pending_at: Optional[datetime] = None
     first_exited_at: Optional[datetime] = None
     last_exited_at: Optional[datetime] = None
+    current_pending_at: Optional[datetime] = None
+    current_pending_elapsed_minutes: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -79,6 +81,10 @@ class RequesterResponseResult:
             "first_pending_at": self.first_pending_at.isoformat() if self.first_pending_at else None,
             "first_exited_at": self.first_exited_at.isoformat() if self.first_exited_at else None,
             "last_exited_at": self.last_exited_at.isoformat() if self.last_exited_at else None,
+            "current_pending_at": self.current_pending_at.isoformat()
+            if self.current_pending_at
+            else None,
+            "current_pending_elapsed_minutes": self.current_pending_elapsed_minutes,
             "intervals": [interval.to_dict() for interval in self.intervals],
         }
 
@@ -163,6 +169,7 @@ def compute_pending_response_times(
     audits: List[dict],
     ticket_id: int,
     pending_tags: Optional[List[str]] = None,
+    now: Optional[datetime] = None,
 ) -> RequesterResponseResult:
     """Calcula tempo do solicitante: cada intervalo em pending ate a saida.
 
@@ -171,15 +178,18 @@ def compute_pending_response_times(
     - se pending_tags for informado, so conta pendentes em que uma dessas tags
       esta ativa no audit trail
     """
+    now = now or datetime.now(timezone.utc)
     wanted_tags = set(pending_tags or [])
-    tag_active = False
+    tag_active = not wanted_tags
+    current_status: Optional[str] = None
     pending_started_at: Optional[datetime] = None
     intervals: List[PendingStatusInterval] = []
 
     for audit in _sorted_audits(audits):
         audit_time = _parse_ts(audit["created_at"])
         events = audit.get("events", [])
-        audit_tag_active = tag_active
+        next_tag_active = tag_active
+        next_status = current_status
 
         if wanted_tags:
             for ev in events:
@@ -189,35 +199,47 @@ def compute_pending_response_times(
                 if values & wanted_tags:
                     current = ev.get("value")
                     if isinstance(current, (list, tuple, set)):
-                        audit_tag_active = bool(set(str(v) for v in current) & wanted_tags)
+                        next_tag_active = bool(set(str(v) for v in current) & wanted_tags)
                     else:
-                        audit_tag_active = bool(set(str(current or "").replace(",", " ").split()) & wanted_tags)
+                        next_tag_active = bool(
+                            set(str(current or "").replace(",", " ").split()) & wanted_tags
+                        )
 
-        for ev in audit.get("events", []):
+        for ev in events:
             if ev.get("field_name") != "status":
                 continue
-
             value = str(ev.get("value")) if ev.get("value") is not None else None
-            prev = str(ev.get("previous_value")) if ev.get("previous_value") is not None else None
+            if value is not None:
+                next_status = value
 
-            if value == "pending" and prev != "pending":
-                pending_started_at = audit_time if not wanted_tags or audit_tag_active else None
-                continue
+        was_counting = current_status == "pending" and tag_active
+        should_count = next_status == "pending" and next_tag_active
 
-            if pending_started_at is not None and prev == "pending" and value != "pending":
-                minutes = round((audit_time - pending_started_at).total_seconds() / 60, 2)
-                intervals.append(
-                    PendingStatusInterval(
-                        entered_pending_at=pending_started_at,
-                        exited_pending_at=audit_time,
-                        exit_to_status=value,
-                        duration_minutes=max(minutes, 0.0),
-                    )
+        if not was_counting and should_count:
+            pending_started_at = audit_time
+        elif was_counting and not should_count and pending_started_at is not None:
+            minutes = round((audit_time - pending_started_at).total_seconds() / 60, 2)
+            intervals.append(
+                PendingStatusInterval(
+                    entered_pending_at=pending_started_at,
+                    exited_pending_at=audit_time,
+                    exit_to_status=next_status,
+                    duration_minutes=max(minutes, 0.0),
                 )
-                pending_started_at = None
-        tag_active = audit_tag_active
+            )
+            pending_started_at = None
 
-    if not intervals:
+        current_status = next_status
+        tag_active = next_tag_active
+
+    active_elapsed = None
+    if pending_started_at is not None:
+        active_elapsed = max(
+            round((now - pending_started_at).total_seconds() / 60, 2),
+            0.0,
+        )
+
+    if not intervals and pending_started_at is None:
         return RequesterResponseResult(
             ticket_id=ticket_id,
             first_response_minutes=None,
@@ -226,16 +248,24 @@ def compute_pending_response_times(
             intervals=[],
         )
 
-    total = round(sum(interval.duration_minutes for interval in intervals), 2)
+    total = (
+        round(sum(interval.duration_minutes for interval in intervals), 2)
+        if intervals
+        else None
+    )
     return RequesterResponseResult(
         ticket_id=ticket_id,
-        first_response_minutes=intervals[0].duration_minutes,
+        first_response_minutes=intervals[0].duration_minutes if intervals else None,
         total_response_minutes=total,
         response_count=len(intervals),
         intervals=intervals,
-        first_pending_at=intervals[0].entered_pending_at,
-        first_exited_at=intervals[0].exited_pending_at,
-        last_exited_at=intervals[-1].exited_pending_at,
+        first_pending_at=(
+            intervals[0].entered_pending_at if intervals else pending_started_at
+        ),
+        first_exited_at=intervals[0].exited_pending_at if intervals else None,
+        last_exited_at=intervals[-1].exited_pending_at if intervals else None,
+        current_pending_at=pending_started_at,
+        current_pending_elapsed_minutes=active_elapsed,
     )
 
 

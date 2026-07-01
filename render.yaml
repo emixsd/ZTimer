@@ -30,6 +30,8 @@ services:
         value: "300"
       - key: PENDING_TIMER_SYNC_QUERY
         value: "type:ticket status:pending"
+      - key: PENDING_SLA_MINUTES
+        value: "60"
       - key: EXPORT_DIR
         value: "exports"
       - key: RESPONSE_EXPORT_FILENAME
